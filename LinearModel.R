@@ -291,9 +291,6 @@ mod5final <- lm(form, data=Data0)
 lm.forecast <- predict(mod5final, newdata=Data1)
 submit <- read_delim( file="Data/sample_submission.csv", delim=",")
 submit$Load <- lm.forecast
-submit = data.frame(lm.forecast)
-write.csv(submit, file="Data/submission_lm.csv", quote=F, sep=",", dec='.',row.names = F)
-
 write.table(submit, file="Data/submission_lm.csv", quote=F, sep=",", dec='.',row.names = F)
 
 
