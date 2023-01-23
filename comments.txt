@@ -1,0 +1,29 @@
+Idées subyacentes: 
+- Appliquer des poids (par rapport à la population) aux températures.  
+
+
+
+Collection de données 
+
+- Données du temps d'ensoleillement par départements en France: 
+https://www.data.gouv.fr/fr/datasets/63909449447299655d304248/ 
+
+- Formula Heat Index
+https://www.alpiniste.fr/indice-chaleur-calculateur/
+
+HI = c₁ + c₂T + c₃φ + c₄Tφ + c₅T² + c₆φ² + c₇T²φ + c₈Tφ² + c₉T²φ²
+T exprime la température (en °C).
+φ l'humidité relative de l'air en %.
+c sont des paramètres constants indépendants des autres paramètres. 
+Paramètres pour le calcul de HI
+    (EN °C)
+c₁= 8,785
+c₂= 1,611
+c₃= 2,339
+c₄= -0,146
+c₅= -1,231 ⋅ 10⁻²
+c₆=	-1,642 ⋅ 10⁻²
+c₇=	2,212 ⋅ 10⁻³
+c₈=	7,255 ⋅ 10⁻⁴
+c₉=	-3,582 ⋅ 10⁻⁶
+
