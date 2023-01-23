@@ -1,5 +1,6 @@
 rm(list=objects())
 setwd("~/Documents/M1/Modelisation predictive/Modelisation predictive") #fac
+setwd("~/M1 Maths&IA/S2/Modelisation predictive/DataChallenge") #computer
 
 #Importation des librairies
 library(tidyverse)
@@ -13,8 +14,8 @@ rmse = function(y, ychap, digits=0){
 
 
 #Importation du jeu de données
-Data0 = read_delim("train.csv", delim=",")
-Data1 = read_delim("test.csv",delim=",")
+Data0 = read_delim("Data/train.csv", delim=",")
+Data1 = read_delim("Data/test.csv",delim=",")
 
 Data0$Time = as.numeric(Data0$Date)
 Data1$Time = as.numeric(Data1$Date)

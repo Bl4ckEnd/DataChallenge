@@ -1,6 +1,6 @@
 Idées subyacentes: 
 - Appliquer des poids (par rapport à la population) aux températures.  
-
+(01/01/2012 - 15/04/2020)
 
 
 Collection de données 
