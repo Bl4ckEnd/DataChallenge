@@ -219,7 +219,8 @@ mod4.rmse_bloc <- lapply(block_list, function(x){rmse(y=Data0$Load[x], ychap=mod
 
 plot(Data0$Date[sel_a], mod4$residuals, type='l')
 
-acf( mod4$residuals)
+acf( mod4$residuals, lag.max = 365) # before was without lag
+acf(mod4$residuals, lag.max = 3*7)
 
 
 form <- eq[[15]]

@@ -27,3 +27,7 @@ c₇=	2,212 ⋅ 10⁻³
 c₈=	7,255 ⋅ 10⁻⁴
 c₉=	-3,582 ⋅ 10⁻⁶
 
+
+
+## Idée de Angel
+Utiliser la critère de Aiteken
