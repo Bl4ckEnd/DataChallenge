@@ -44,7 +44,7 @@ Temp[,1] = as.Date(substring(Temp[,1],1,10))
 df_TR = Temp %>% group_by(Date)  %>%
   summarise(HI = mean(HI))
 
-#write.csv(df_TR, "Data/df_TempRess.csv", row.names=FALSE)
+write.csv(df_TR, "Data/df_TempRes1.csv", row.names=FALSE)
 
 ########THIS WILL WORK
 
