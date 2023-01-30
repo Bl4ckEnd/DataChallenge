@@ -3,42 +3,8 @@ library(tidyverse)
 library(lubridate)
 library(mgcv)
 
-
-Data0 <- read_delim("Data/new_Data0.csv", delim=",")
-Data1<- read_delim("Data/new_Data1.csv", delim=",")
-
-Data0$WeekDays2 <- forcats::fct_recode(Data0$WeekDays, 'WorkDay'='Thursday' ,'WorkDay'='Tuesday', 'WorkDay' = 'Wednesday')
-Data1$WeekDays2 <- forcats::fct_recode(Data1$WeekDays, 'WorkDay'='Thursday' ,'WorkDay'='Tuesday', 'WorkDay' = 'Wednesday')
-
-Data0$Summer_break <- factor(Data0$Summer_break)
-Data1$Summer_break <- factor(Data1$Summer_break)
-
-Data0$DLS = factor(Data0$DLS)
-Data1$DLS = factor(Data1$DLS)
-
-Data0$Month = factor(Data0$Month)
-Data1$Month = factor(Data1$Month)
-
-Data0$Christmas_break = factor(Data0$Christmas_break)
-Data1$Christmas_break = factor(Data1$Christmas_break)
-
-
-Data0$Time <- as.numeric(Data0$Date)
-Data1$Time <- as.numeric(Data1$Date)
-
-TR_0 <- read_delim("Data/df_TempRess.csv", delim=",")
-TR_1 <- read_delim("Data/df_TempRes1.csv", delim=",")
-
-Data0 <- merge(Data0,TR_0,by=c("Date"))
-Data1 <- merge(Data1,TR_1,by=c("Date"))
-
-write.csv(Data0, file="Data/FinalData0.csv")
-write.csv(Data1, file="Data/FinalData1.csv")
-
-save(Data0, file="Data/Data0.Rda")
-save(Data1, file="Data/Data1.Rda")
-
 load("Data/Data0.Rda")
+load("Data/Data1.Rda")
 
 sel_a <- which(Data0$Year<=2019)
 sel_b <- which(Data0$Year>2019)
@@ -46,12 +12,33 @@ sel_b <- which(Data0$Year>2019)
 source('R/score.R')
 source("R/mape.R")
 
-Data0
 
 mod <- lm(Load ~ ., data=Data0)
 summary(mod)
 
 ######### test lm with polynomials
-mod0 <- lm(Load ~ Temp + WeekDays + Load.1 + Temp^2 + WeekDays^2 + Load.1^2, data=Data0)
-mod0.pred <- predict(mod0, Data0)
-rmse(Data0$Load, mod0.pred)
+
+mod0 <- lm(Load ~ Temp + WeekDays + Load.1 + Temp^2 + WeekDays^2 + Load.1^2, data=Data0[sel_a,])
+mod0.pred <- predict(mod0, Data0[sel_b,])
+rmse(Data0[sel_b,]$Load, mod0.pred)
+
+mod <- lm(Load ~ Temp + Time + DLS + Summer_break + Christmas_break
+           + WeekDays + WeekDays2 + toy
+           + poly(Load.1, 2) + poly(Temp_s99, 4) + poly(Load.7, 3)
+           , data=Data0[sel_a,])
+mod.pred <- predict(mod, Data0[sel_b,])
+rmse(Data0[sel_b,]$Load, mod.pred)
+
+summary(mod)
+
+mod <- lm(Load ~ . + I(Temp^2) + I(Load.1^2) + I(Load.7^2) + I(GovernmentResponseIndex^2), data=Data0[sel_a,])
+mod.pred <- predict(mod, Data0[sel_b,])
+rmse(Data0[sel_b,]$Load, mod.pred)
+
+##### create a submission
+mod <- lm(Load ~ . + I(Temp^2) + I(Load.1^2) + I(Load.7^2) + I(GovernmentResponseIndex^2), data=Data0)
+mod.full_pred <- predict(mod, Data1)
+
+submit <- read_delim( file="Data/sample_submission.csv", delim=",")
+submit$Load <- mod.full_pred
+write.table(submit, file="Data/submission_lm_with_polynomial.csv", quote=F, sep=",", dec='.',row.names = F)

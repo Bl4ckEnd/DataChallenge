@@ -2,13 +2,10 @@ rm(list=objects())
 library(tidyverse)
 library(lubridate)
 library(mgcv)
+library(qgam)
 
-
-Data0 <- read_delim("Data/new_Data0.csv", delim=",")
-Data1<- read_delim("Data/new_Data1.csv", delim=",")
-
-Data0$Time <- as.numeric(Data0$Date)
-Data1$Time <- as.numeric(Data1$Date)
+load("Data/Data0.Rda")
+load("Data/Data1.Rda")
 
 sel_a <- which(Data0$Year<=2019)
 sel_b <- which(Data0$Year>2019)
@@ -27,20 +24,20 @@ rmse(Data0$Load, g1.predicted)
 
 ### full model
 g2 <- gam(formula = Load ~ WeekDays + Christmas_break + Summer_break + DLS + Month + BH + Movement
+          + GovernmentResponseIndex
           + s(TauxPopMovement, k=5, bs="cr")
           + s(Load.1, k=15, bs="cr")
           + s(Load.7, k=15, bs="cr")
-          + s(Temp, k=15, bs="cr")
+          + s(Temp, k=15, bs="cc")
           + s(Temp_s95, k=10, bs="cr")
           + s(Temp_s99, k=10, bs="cr")
           + s(Temp_s95_min, k=10, bs="cr")
           + s(Temp_s99_min, k=10, bs="cr")
           + s(toy, k=10, bs="cr")
-          + s(GovernmentResponseIndex, k=5, bs="cr")
-          + s(Temp_s95, k=10, bs="cr"), data=Data0)
+          + s(Temp_s95, k=10, bs="cr"), data=Data0[sel_a,])
 
-g2.predicted <- predict.gam(g2, Data0)
-rmse(Data0$Load, g2.predicted)
+g2.predicted <- predict.gam(g2, Data0[sel_b,])
+rmse(Data0$Load[sel_b], g2.predicted)
 
 ### try validation set
 g2_sela <- gam(formula = Load ~ WeekDays + Christmas_break + Summer_break + DLS + Month + BH
@@ -82,7 +79,39 @@ rmse(lm.data1$Load, lm.pred)
 
 data1.predicted = predict.gam(g2, Data1)
 
+
+####################
+####################
+# Create base-model from paper
+
+mod.gam <- gam(Load ~ WeekDays2 + BH + Christmas_break + Load.1
+               + Summer_break + DLS
+               + s(Load.7) + s(Time) + s(Temp) + s(toy, k = 3, bs = "cc"),
+               data=Data0[sel_a,])
+
+gam.pred <- predict(mod.gam, Data0[sel_b,])
+rmse(Data0[sel_b,]$Load, gam.pred)
+summary(mod.gam)
+
+### try the same with qgam - gam with quantile regression
+mod.qgam <- qgam(Load ~ WeekDays2 + BH + Christmas_break + Load.1
+               + Summer_break + DLS
+               + s(Load.7) + s(Time) + s(Temp) + s(toy, k = 3, bs = "cc"),
+               data=Data0[sel_a,], qu = 0.5)
+
+qgam.pred <- predict(mod.qgam, Data0[sel_b,])
+rmse(Data0[sel_b,]$Load, qgam.pred)
+summary(mod.qgam)
+
+#### use quantile regression for submission
+mod.qgam <- qgam(Load ~ WeekDays2 + BH + Christmas_break + Load.1
+                 + Summer_break + DLS
+                 + s(Load.7) + s(Time) + s(Temp) + s(toy, k = 3, bs = "cc"),
+                 data=Data0, qu = 0.5)
+
+qgam.pred <- predict(mod.qgam, Data1)
+
 # create submission
 submit <- read_delim( file="Data/sample_submission.csv", delim=",")
-submit$Load <- data1.predicted
-write.table(submit, file="Data/gam_g2.csv", quote=F, sep=",", dec='.',row.names = F)
+submit$Load <- qgam.pred
+write.table(submit, file="Data/submission_qgam.csv", quote=F, sep=",", dec='.',row.names = F)
