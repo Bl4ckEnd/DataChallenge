@@ -30,24 +30,43 @@ rmse<-function(y, ychap, digits=0)
 {
   return(round(sqrt(mean((y-ychap)^2,na.rm=TRUE)),digits=digits))
 }
-#Data0$WeekDays2 = factor(Data0$WeekDays2)
-#Data0$Date = factor(Data0$Date)
-#Data0$Time = factor(Data0$Time)
+
+
+Data0$WeekDays2 = factor(Data0$WeekDays2)
+Data0$Date = factor(Data0$Date)
+Data0$Time = factor(Data0$Time)
+Data0$DLS = factor(Data0$DLS)
+Data0$Month = factor(Data0$Month)
 
 ##### training models
-mod0 <- gam(Load ~ Date+WeekDays2+DLS+Month+TauxPopMovement+
-              s(Load.1,k=10, bs ="cr")+
-              s(Load.7,k=10, bs ="cr")+
-              s(Temp_s95_min,k=10, bs ="cr")+
-              s(Temp_s95_max,k=10, bs ="cr")+
-              s(Temp_s99_max,k=10, bs ="cr")+
-              s(Temp_s99_min,k=10, bs ="cr")+
-              s(Temp,k=10, bs ="cr")+
-              s(HI,k=10, bs ="cr"),data = Data0[sel_a,], method="ML",optimizer="outer")
+library(splines)
+rl = glm(Load~WeekDays2, data=Data0)
+
+mod0 = gam(Load ~ toy + TauxPopMovement +
+             s(HI, k = 10, bs = "cc") +
+             s(Temp_s95_min, k = 10, bs = "cc") + 
+             s(Temp_s95_max, k=10, bs="cc")+
+             s(Load.7, k=10, bs="cc"), data=Data0)
+
+pp = seq(0,1,0.01)
+pred.rl = predict(rl, newdata=Data1)
+pred.mod0 = predict(mod0, newdata=Data1)
+
+fct = function(p){
+  n = length(p)
+  result = rep(0,n)
+  for (i in 1:n){
+    pp = p[i]
+    mod0.forecast = (pp)*pred.mod0 + (1-pp)*pred.rl
+    result[i] = rmse(y=Data1$Load, ychap=mod0.forecast)
+    }
+  return(result)
+}
+plot(pp, fct(pp))
+
+RMSE_min = fct(pp[which.min(fct(pp))]); RMSE_min
 
 
-mod0.forecast <- predict(mod0, newdata=Data0[sel_b,])
-rmse(y=Data0$Load[sel_b], ychap=mod0.forecast)
 
 forecast <- predict(mod0, newdata=Data1)
 submit <- read_delim( file="Data/sample_submission.csv", delim=",")
