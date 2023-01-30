@@ -27,20 +27,20 @@ rmse(Data0$Load, g1.predicted)
 
 ### full model
 g2 <- gam(formula = Load ~ WeekDays + Christmas_break + Summer_break + DLS + Month + BH + Movement
+          + GovernmentResponseIndex
           + s(TauxPopMovement, k=5, bs="cr")
           + s(Load.1, k=15, bs="cr")
           + s(Load.7, k=15, bs="cr")
-          + s(Temp, k=15, bs="cr")
+          + s(Temp, k=15, bs="cc")
           + s(Temp_s95, k=10, bs="cr")
           + s(Temp_s99, k=10, bs="cr")
           + s(Temp_s95_min, k=10, bs="cr")
           + s(Temp_s99_min, k=10, bs="cr")
           + s(toy, k=10, bs="cr")
-          + s(GovernmentResponseIndex, k=5, bs="cr")
-          + s(Temp_s95, k=10, bs="cr"), data=Data0)
+          + s(Temp_s95, k=10, bs="cr"), data=Data0[sel_a,])
 
-g2.predicted <- predict.gam(g2, Data0)
-rmse(Data0$Load, g2.predicted)
+g2.predicted <- predict.gam(g2, Data0[sel_b,])
+rmse(Data0$Load[sel_b], g2.predicted)
 
 ### try validation set
 g2_sela <- gam(formula = Load ~ WeekDays + Christmas_break + Summer_break + DLS + Month + BH
