@@ -33,24 +33,33 @@ rmse<-function(y, ychap, digits=0)
 
 
 Data0$WeekDays2 = factor(Data0$WeekDays2)
-Data0$Date = factor(Data0$Date)
-Data0$Time = factor(Data0$Time)
+#Data0$Date = factor(Data0$Date)
+#Data0$Time = factor(Data0$Time)
 Data0$DLS = factor(Data0$DLS)
 Data0$Month = factor(Data0$Month)
+Data0$Summer_break = factor(Data0$Summer_break)
+Data0$Christmas_break = factor(Data0$Christmas_break)
+
+Data1$DLS = factor(Data1$DLS)
+Data1$Month = factor(Data1$Month)
+Data1$Summer_break = factor(Data1$Summer_break)
+Data1$Christmas_break = factor(Data1$Christmas_break)
+
 
 ##### training models
-library(splines)
-rl = glm(Load~WeekDays2, data=Data0)
 
+#rl = glm(Load~WeekDays2+Month+DLS+Summer_break+Christmas_break , data=Data0[sel_a,])
+
+'''
 mod0 = gam(Load ~ toy + TauxPopMovement +
              s(HI, k = 10, bs = "cc") +
              s(Temp_s95_min, k = 10, bs = "cc") + 
              s(Temp_s95_max, k=10, bs="cc")+
-             s(Load.7, k=10, bs="cc"), data=Data0)
+             s(Load.7, k=10, bs="cc"), data=Data0[sel_a,])
 
-pp = seq(0,1,0.01)
-pred.rl = predict(rl, newdata=Data1)
-pred.mod0 = predict(mod0, newdata=Data1)
+#pp = seq(0,1,0.01)
+#pred.rl = predict(rl, newdata=Data0[sel_b,])
+pred.mod0 = predict(mod0, newdata=Data0[sel_b,])
 
 fct = function(p){
   n = length(p)
@@ -58,20 +67,35 @@ fct = function(p){
   for (i in 1:n){
     pp = p[i]
     mod0.forecast = (pp)*pred.mod0 + (1-pp)*pred.rl
-    result[i] = rmse(y=Data1$Load, ychap=mod0.forecast)
+    result[i] = rmse(y=Data0$Load[sel_b], ychap=mod0.forecast)
     }
   return(result)
 }
 plot(pp, fct(pp))
-
+pp[which.min(fct(pp))]
 RMSE_min = fct(pp[which.min(fct(pp))]); RMSE_min
+'''
 
+rl = glm(Load~WeekDays2+Month+DLS+Year+toy+ TauxPopMovement, data=Data0[sel_a,])
+mod0 = gam(Load ~ s(HI, k = 10, bs = "cc") +
+             s(Temp_s95_min, k = 10, bs = "cc") +
+             s(Temp_s95_max, k = 10, bs = "cc") +
+             s(Load.1, k=10, bs="cr")+
+             s(Load.7, k=10, bs="cc"), data=Data0[sel_a,])
+
+
+#pred.rl = predict(rl, newdata=Data0[sel_b,])
+pred.mod0 = predict(mod0, newdata=Data0[sel_b,])
+#plot(0.95*pred.mod0 + (1-0.95)*pred.rl, type='l', col='black')
+lines(Data0$Load[sel_b], col='red')
+
+rmse(y=Data0$Load[sel_b], ychap=pred.mod0)
 
 
 forecast <- predict(mod0, newdata=Data1)
 submit <- read_delim( file="Data/sample_submission.csv", delim=",")
 submit$Load <- forecast
-write.table(submit, file="Data/submission:L1.csv", quote=F, sep=",", dec='.',row.names = F)
+write.table(submit, file="Data/submission:L3.csv", quote=F, sep=",", dec='.',row.names = F)
 
 
 
