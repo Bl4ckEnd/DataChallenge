@@ -3,6 +3,7 @@ library(tidyverse)
 library(lubridate)
 library(mgcv)
 library(qgam)
+library(forecast)
 
 load("Data/Data0.Rda")
 load("Data/Data1.Rda")
@@ -115,6 +116,8 @@ mod.qgam <- qgam(Load ~ WeekDays2 + BH + Christmas_break + Load.1
                  data=Data0, qu = 0.5)
 
 qgam.pred <- predict(mod.qgam, Data1)
+
+plot(mod.qgam$residuals)
 
 # create submission
 submit <- read_delim( file="Data/sample_submission.csv", delim=",")
