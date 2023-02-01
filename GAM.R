@@ -96,12 +96,14 @@ summary(mod.gam)
 ### try the same with qgam - gam with quantile regression
 mod.qgam <- qgam(Load ~ WeekDays2 + BH + Christmas_break + Load.1
                + Summer_break + DLS
-               + s(Load.7) + s(Time) + s(Temp) + s(toy, k = 3, bs = "cc"),
+               + s(Load.7) + s(Time) + s(Temp) + s(toy, k = 3, bs = "cc")
+               + s(Temp_s99_min, temp_s99_max),
                data=Data0[sel_a,], qu = 0.5)
 
 qgam.pred <- predict(mod.qgam, Data0[sel_b,])
 rmse(Data0[sel_b,]$Load, qgam.pred)
 summary(mod.qgam)
+# if in summary edf = k-1 , k is probably too small
 
 #### use quantile regression for submission
 mod.qgam <- qgam(Load ~ WeekDays2 + BH + Christmas_break + Load.1
