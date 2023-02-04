@@ -49,8 +49,8 @@ summary(gam1)
 plot(gam1, residuals=T)
 
 ###VOIR CORRECTION DU PROF
-mod0 = gam(Load ~ WeekDays2*DLS+BH+ WeekDays*Load.1+ GovernmentResponseIndex +
-              s(Temp_s95_max - Temp_s95_min)+
+mod0 = gam(Load ~ WeekDays2*DLS+BH+ WeekDays*Load.1+ GovernmentResponseIndex 
+           + s(Temp_s95_max - Temp_s95_min)+
             + s(as.numeric(Date), k=3, bs='cr')+ s(toy,k=30, bs='cc', by=as.factor(WeekDays))
             +s(Time, k=5)+s(Temp,k=10, bs='cr', by=as.factor(WeekDays2)),
             data=Data0)
