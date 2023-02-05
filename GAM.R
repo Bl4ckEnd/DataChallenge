@@ -64,22 +64,6 @@ lines(Data0[sel_b,]$Date, g2_sela.predicted, type="l", col=alpha("red", alpha=0.
 plot(Data0$Date, Data0$Load, type="l")
 lines(Data0$Date, g1.predicted, type="l", col=alpha("red", 0.4))
 
-##### lm
-lm.data0 = Data0[sel_a,]
-lm.data0$Summer_break = as.factor(lm.data0$Summer_break)
-lm.data0$Christmas_break = as.factor(lm.data0$Christmas_break)
-lm.data1 = Data0[sel_b,]
-lm.data1$Summer_break = as.factor(lm.data1$Summer_break)
-lm.data1$Christmas_break = as.factor(lm.data1$Christmas_break)
-
-
-mod.lm = lm(Load~., data=lm.data0)
-lm.pred = predict(mod.lm, newdata=lm.data1)
-rmse(lm.data1$Load, lm.pred)
-
-
-data1.predicted = predict.gam(g2, Data1)
-
 
 ####################
 ####################
@@ -98,7 +82,7 @@ summary(mod.gam)
 mod.qgam <- qgam(Load ~ WeekDays2 + BH + Christmas_break + Load.1
                + Summer_break + DLS
                + s(Load.7) + s(Time) + s(Temp) + s(toy, k = 3, bs = "cc", by=WeekDays2)
-               + s(Temp_s99_min, temp_s99_max)
+               + s(Temp_s99_min, Temp_s99_max)
                + s(Temp, Time),
                data=Data0[sel_a,], qu = 0.5)
 
@@ -111,7 +95,7 @@ summary(mod.qgam)
 mod.qgam <- qgam(Load ~ WeekDays2 + BH + Christmas_break + Load.1
                  + Summer_break + DLS
                  + s(Load.7) + s(Time) + s(Temp) + s(toy, k = 3, bs = "cc", by=WeekDays2)
-                 + s(Temp_s99_min, temp_s99_max)
+                 + s(Temp_s99_min, Temp_s99_max)
                  + s(Temp, Time),
                  data=Data0, qu = 0.5)
 
@@ -123,3 +107,46 @@ plot(mod.qgam$residuals)
 submit <- read_delim( file="Data/sample_submission.csv", delim=",")
 submit$Load <- qgam.pred
 write.table(submit, file="Data/submission_qgam.csv", quote=F, sep=",", dec='.',row.names = F)
+
+
+#### submission qgam_2
+mod.qgam <- qgam(Load ~ WeekDays2 + BH + Christmas_break + Load.1
+                 + Summer_break + DLS
+                 + s(Load.7) + s(Time) + s(Temp) + s(toy, k = 3, bs = "cc", by=WeekDays2)
+                 + s(Temp_s99_min, Temp_s99_max)
+                 + s(Temp_s99) + s(Temp_s95)
+                 + s(Temp, Time),
+                 data=Data0, qu = 0.5)
+
+qgam.pred <- predict(mod.qgam, Data1)
+
+# check acf
+acf(predict(mod.qgam, Data0), lag.max = 7*3)
+pacf(predict(mod.qgam, Data0), lag.max = 7*3)
+
+plot(Data0$Date[-1], mod.qgam$residuals[-1])
+
+# create submission
+submit <- read_delim( file="Data/sample_submission.csv", delim=",")
+submit$Load <- qgam.pred
+write.table(submit, file="Data/submission_qgam_2.csv", quote=F, sep=",", dec='.',row.names = F)
+
+
+#### submission qgam_4 - with GovernmentResponseIndex ! did not work at all +1000 score
+mod.qgam <- qgam(Load ~ WeekDays2 + BH + Christmas_break + Load.1
+                 + Summer_break + DLS + GovernmentResponseIndex
+                 + s(Load.7) + s(Time) + s(Temp) + s(toy, k = 3, bs = "cc", by=WeekDays2)
+                 + s(Temp_s99_min, Temp_s99_max)
+                 + s(Temp_s99) + s(Temp_s95)
+                 + s(Temp, Time),
+                 data=Data0, qu = 0.5)
+
+qgam.pred <- predict(mod.qgam, Data1)
+
+plot(Data0$Date[-1], mod.qgam$residuals[-1])
+
+# create submission
+submit <- read_delim( file="Data/sample_submission.csv", delim=",")
+submit$Load <- qgam.pred
+write.table(submit, file="Data/submission_qgam_4.csv", quote=F, sep=",", dec='.',row.names = F)
+
