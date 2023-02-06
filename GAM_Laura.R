@@ -118,10 +118,22 @@ gam.check(mod0)
 qgam.pred <- predict(mod0, Data1)
 summary(mod0)
 
+
+### try the same with qgam - gam with quantile regression
+mod0 <- qgam(Load ~ WeekDays*Load.1 + BH + Christmas_break
+             + Summer_break + DLS + s(Temp) + s(Temp_s99_max, Temp_s99_min)
+             + s(Load.7) + s(Time, k=7) + s(toy, k =40, bs = "cc", by=as.factor(WeekDays))
+             + s(Temp, Time, k=20), 
+             data=Data0, qu=0.4)
+
+gam.check(mod0)
+qgam.pred <- predict(mod0, Data1)
+summary(mod0)
+
 #Feat engineering with basis dimension
-# create submission: submission_qgamL6.csv
+# create submission: submission_qgamL7.csv
 submit <- read_delim( file="Data/sample_submission.csv", delim=",")
 submit$Load <- qgam.pred
-write.table(submit, file="Data/submission_qgamL6.csv", quote=F, sep=",", dec='.',row.names = F)
+write.table(submit, file="Data/submission_qgamL7.csv", quote=F, sep=",", dec='.',row.names = F)
 
 
