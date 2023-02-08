@@ -137,3 +137,32 @@ submit$Load <- qgam.pred
 write.table(submit, file="Data/submission_qgamL7.csv", quote=F, sep=",", dec='.',row.names = F)
 
 
+
+
+### try the same with qgam and add "mood WeekDays" : A SOUMETTRE
+WD = Data0$WeekDays
+index = which(Data0$GovernmentResponseIndex>=70)
+WD[index]="Saturday"
+Data00 = cbind(Data0,WD)
+
+WD = Data1$WeekDays
+index = which(Data1$GovernmentResponseIndex>=70)
+WD[index]="Saturday"
+Data11 = cbind(Data1, WD)
+
+mod0 <- qgam(Load ~ Load.1:as.factor(WeekDays) + BH + Christmas_break
+             + Summer_break + DLS + s(Temp) + s(Temp_s99_max, Temp_s99_min)
+             + s(Load.7) + s(Time, k=7) + s(toy, k =30, bs = "cc", by=as.factor(WD))
+             + s(Temp, Time, k=20), 
+             data=Data00, qu=0.4)
+
+gam.check(mod0)
+qgam.pred <- predict(mod0, Data11)
+
+
+# create submission: submission_qgamL9.csv
+submit <- read_delim( file="Data/sample_submission.csv", delim=",")
+submit$Load <- qgam.pred
+write.table(submit, file="Data/submission_qgamL10.csv", quote=F, sep=",", dec='.',row.names = F)
+
+
