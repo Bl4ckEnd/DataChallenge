@@ -106,7 +106,6 @@ write.table(submit, file="Data/submission_qgamL5.csv", quote=F, sep=",", dec='.'
 
 
 
-#######BEST SCORE EVER EVER 755 ---> ROAD TO BE EMPLOYED BY EDF
 ### try the same with qgam - gam with quantile regression
 mod0 <- qgam(Load ~ WeekDays*Load.1 + BH + Christmas_break
              + Summer_break + DLS + s(Temp) + s(Temp_s99_max, Temp_s99_min)
@@ -139,7 +138,8 @@ write.table(submit, file="Data/submission_qgamL7.csv", quote=F, sep=",", dec='.'
 
 
 
-### try the same with qgam and add "mood WeekDays" : A SOUMETTRE
+### try the same with qgam and add "mood WeekDays" :
+#######BEST SCORE EVER EVER 705 ---> ROAD TO BE EMPLOYED BY EDF
 WD = Data0$WeekDays
 index = which(Data0$GovernmentResponseIndex>=70)
 WD[index]="Saturday"
@@ -160,7 +160,7 @@ gam.check(mod0)
 qgam.pred <- predict(mod0, Data11)
 
 
-# create submission: submission_qgamL9.csv
+# create submission: submission_qgamL10.csv
 submit <- read_delim( file="Data/sample_submission.csv", delim=",")
 submit$Load <- qgam.pred
 write.table(submit, file="Data/submission_qgamL10.csv", quote=F, sep=",", dec='.',row.names = F)
