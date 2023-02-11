@@ -316,6 +316,7 @@ plot(ssm_dyn, pause=F, window_size = 14, date = Data$Date, sel = sel_b)
 ssm_em <- viking::select_Kalman_variances(ssm, X[sel_a,], y[sel_a], method = 'em', n_iter = 10^3,
                                           Q_init = diag(d), verbose = 10, mode_diag = T)
 ssm_em <- predict(ssm_em, X, y, type='model', compute_smooth = TRUE)
+ssm_em2 <- predict(ssm_em, X[sel_b,], type='model', compute_smooth = TRUE)
 ssm_em <-readRDS("Results/ssm_em.RDS")
 
 gam9.kalman.Dyn.em <- ssm_em$pred_mean%>%tail(nrow(Data1))
