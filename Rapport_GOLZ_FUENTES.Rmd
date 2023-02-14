@@ -1,0 +1,50 @@
+---
+title: "Modélisation Prédictive Rapport"
+author: "Valentin Gölz, Laura Fuentes"
+date: "February 14, 2023"
+output:
+  html_document:
+    df_print: paged
+---
+
+this is some text.
+# This is bigger text
+```{r preparation, include=FALSE}
+rm(list=objects())
+library(tidyverse)
+library(lubridate)
+library(mgcv)
+library(qgam)
+library(forecast)
+
+load("Data/Data0.Rda")
+load("Data/Data1.Rda")
+
+sel_a <- which(Data0$Year<=2019)
+sel_b <- which(Data0$Year>2019)
+
+source('R/score.R')
+source("R/mape.R")
+```
+
+```{r Linear Models, echo=TRUE}
+mod1 = lm(Load~WeekDays2+Temp, data=Data0[sel_a,])
+summary(mod1)
+```
+
+```{r GA Models, include=TRUE}
+
+```
+
+```{r GAM + quantile regression, include=TRUE}
+
+```
+
+```{r GAM + ARIMA, include=TRUE}
+
+```
+
+```{r GAM + KALMAN, include=TRUE}
+
+```
+
