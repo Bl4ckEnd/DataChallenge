@@ -1,6 +1,18 @@
-gmr2020 <- read_csv("Data/Region_Mobility_Report_CSVs/2020_FR_Region_Mobility_Report.csv")
-gmr2021 <- read_csv("Data/Region_Mobility_Report_CSVs/2021_FR_Region_Mobility_Report.csv")
-gmr2022 <- read_csv("Data/Region_Mobility_Report_CSVs/2022_FR_Region_Mobility_Report.csv")
+rm(list=objects())
+graphics.off()
+library(tidyverse)
+library(lubridate)
+library(mgcv)
+library(qgam)
+library(forecast)
+
+rmse = function(y, ychap, digits=0){
+  return(round(sqrt(mean((y-ychap)^2, na.rm=TRUE)), digits=digits))
+}
+
+gmr2020 <- read_csv("Data/2020_FR_Region_Mobility_Report.csv")
+gmr2021 <- read_csv("Data/2021_FR_Region_Mobility_Report.csv")
+gmr2022 <- read_csv("Data/2022_FR_Region_Mobility_Report.csv")
 
 gmr <- rbind(gmr2020, gmr2021, gmr2022)
 
@@ -70,28 +82,36 @@ col <- yarrr::piratepal("info2")
 
 retail.index <- grep(pattern = "retail_and_recreation", x=names(google))
 plot(google$date, google[,retail.index[1]], type='l', col=col[1], ylim=google[,retail.index]%>%range(na.rm=T))
-for(i in c(2:length(retail.index)))
-{
-  lines(google$date, google[,retail.index[i]], type='l', col=col[i])
-}
-legend("topleft", col=col, names(google)[retail.index], lty=1, bty='n', ncol=2, lwd=2)
-
-
 
 retail.index <- grep(pattern = "residential", x=names(google))
 plot(google$date, google[,retail.index[1]], type='l', col=col[1], ylim=google[,retail.index]%>%range(na.rm=T))
-for(i in c(2:length(retail.index)))
-{
-  lines(google$date, google[,retail.index[i]], type='l', col=col[i])
-}
-legend("topleft", col=col, names(google)[retail.index], lty=1, bty='n', ncol=2, lwd=2)
 
+load("Data/Data0.Rda")
+load("Data/Data1.Rda")
+
+Data0$Time <- as.numeric(Data0$Date)
+
+WD = Data0$WeekDays
+index = which(Data0$GovernmentResponseIndex>=70)
+WD[index]="Saturday"
+Data0 = cbind(Data0,WD)
+
+WD = Data1$WeekDays
+index = which(Data1$GovernmentResponseIndex>=70)
+WD[index]="Saturday"
+Data1 = cbind(Data1, WD)
 
 
 saveRDS(google,  "Data/google.RDS")
-Data <- left_join(Data, google, by=c('Date'='date'))
+Data0 <- left_join(Data0, idf, by=c('Date'='date'))
+Data0 <- left_join(Data0, reg, by=c('Date'='Proven_date'))
+#replace NA par des 0
+Data0[is.na(Data0)]= 0
 
-
+Data1 <- left_join(Data1, idf, by=c('Date'='date'))
+Data1 <- left_join(Data1, reg, by=c('Date'='Proven_date'))
+#replace NA par des 0
+Data1[is.na(Data1)]= 0
 
 
 
