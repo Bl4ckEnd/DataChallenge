@@ -45,9 +45,9 @@ equation <- "Load ~ Load.1:as.factor(WeekDays) + BH + Christmas_break + Summer_b
 
 gam.0<-qgam(equation%>%as.formula, data=Data0, qu=0.4)
 gam.forecast <- predict(gam.0, newdata=Data1)
-Load = gam.forecast
 Data1 = Data1[,-20]
-Data1 = cbind(Data1,Load)
+#Submission 14: Data1 = add_column(Data1, Load=lead(Data1$Load.1, default=mean(Data1$Load.1)), .after = "Date")
+Data1 = cbind(Data1, Load=gam.forecast) #submission 12 best so far
 
 Data = rbind(Data0,Data1)
 
@@ -66,7 +66,10 @@ y <- Data$Load
 ssm <- viking::statespace(X, y)
 
 #Dynamic
-ssm_dyn <- viking::select_Kalman_variances(ssm, X[1:3051,], y[1:3051], q_list = 2^(-30:0), p1 = 1, ncores = 6)
+#ssm_dyn <- viking::select_Kalman_variances(ssm, X[1:3051,], y[1:3051], q_list = 2^(-30:0), p1 = 1, ncores = 6)
+#saveRDS(ssm_dyn, "Results/ssm_dyn.RDS")
+ssm_dyn = readRDS("Results/ssm_dyn.RDS")
+
 ssm_dyn <- predict(ssm_dyn, X, y, type='model', compute_smooth = TRUE)
 gam9.kalman.Dyn <- ssm_dyn$pred_mean%>%tail(nrow(Data1))
 rmse(y=Data1$Load, ychap=gam9.kalman.Dyn)
@@ -77,8 +80,9 @@ plot(ssm_dyn, pause=F, window_size = 14, date = Data$Date)
 ##### SUBMISSION qgamL12 BEST SO FAR
 #submit <- read_delim( file="Data/sample_submission.csv", delim=",")
 #submit$Load <- gam9.kalman.Dyn
-#write.table(submit, file="Data/submission_qgamL12.csv", quote=F, sep=",", dec='.',row.names = F)
+#write.table(submit, file="Data/submission_qgamL15.csv", quote=F, sep=",", dec='.',row.names = F)
 
+##### SUBMISSION qgamL13 SAME AS BEFORE
 # using expectation-maximization
 ssm_em <- viking::select_Kalman_variances(ssm, X[1:3051,], y[1:3051], method = 'em', n_iter = 10^3,
                                           Q_init = diag(d), verbose = 10, mode_diag = T)
@@ -91,7 +95,6 @@ rmse(y=Data1$Load, ychap=gam9.kalman.Dyn.em)
 plot(Data1$Date, Data1$Load.1, type='l')
 lines(Data1$Date, gam9.kalman.Dyn.em, col='red')
 
-##### SUBMISSION qgamL13 SAME AS BEFORE
 
 
 
