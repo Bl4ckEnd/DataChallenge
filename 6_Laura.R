@@ -1,6 +1,3 @@
-## 
-
-
 ## ajouter le temps dans l'arbre et si jamais il y a des ruptures temporelles: 
 ## ceci sera ajouté 
 
