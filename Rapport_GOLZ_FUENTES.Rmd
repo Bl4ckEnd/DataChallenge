@@ -35,7 +35,7 @@ summary(mod1)
 ```{r GA Models, include=TRUE}
 
 ```
-
+En fixant le quantile à 0.4, on a changé la fonction de perte. On a ainsi introduit un biais, qui permet de s'ajuster mieux aux données du covid, notamment en .....
 ```{r GAM + quantile regression, include=TRUE}
 
 ```
