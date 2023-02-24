@@ -7,44 +7,65 @@ output:
     df_print: paged
 ---
 
-this is some text.
+Le premier reflèxe est ici de télécharger l'ensemble des packages dont on fera usage lors du développement des différents modèles.  
 # This is bigger text
 ```{r preparation, include=FALSE}
 rm(list=objects())
-library(tidyverse)
-library(lubridate)
-library(mgcv)
-library(qgam)
-library(forecast)
 
+library(mgcv)
+library(yarrr)
+library(qgam)
+library(magrittr)
+library(forecast)
+library(tidyverse)
+library(ranger)
+library(opera)
+```
+
+On télécharge ensuite les deux jeux de données
+```{r Téléchargement des données, echo=TRUE}
 load("Data/Data0.Rda")
 load("Data/Data1.Rda")
 
 sel_a <- which(Data0$Year<=2019)
 sel_b <- which(Data0$Year>2019)
 
-source('R/score.R')
-source("R/mape.R")
 ```
 
+Le but ici est de construire un modèle qui permettant de prédire la consommation française en énergie pendant la période du Covid. 
+Pour comprendre et apprehender le cadre d'étude on commencera par effectuer un modèle simple. C'est-à-dire un modèle linéaire à deux covariables, une quantitative et une autre catégorique. La variable WeekDays2 est une version modifiée de la variable WeekDays qui distingue les jours laborales, samedis et dimanches. 
 ```{r Linear Models, echo=TRUE}
 mod1 = lm(Load~WeekDays2+Temp, data=Data0[sel_a,])
 summary(mod1)
 ```
-
+Pour construire l'équation, nous nous commes d'une part concentrés sur le poids des coefficients au niveau de la régression linéaire. D'autre part on a considéré les effets des jours de la semaine sur la consommation du jour précédent. 
 ```{r GA Models, include=TRUE}
 
 ```
-En fixant le quantile à 0.4, on a changé la fonction de perte. On a ainsi introduit un biais, qui permet de s'ajuster mieux aux données du covid, notamment en .....
+
+Dans la suite on utilisera le package qgam, et en particulier la fonction qgam. Celle-ci est performe une régression quantile. En fixant le quantile à 0.4, on a changé la fonction de perte. On a ainsi introduit un biais, qui permet de s'ajuster mieux aux données du covid.  
 ```{r GAM + quantile regression, include=TRUE}
 
 ```
 
-```{r GAM + ARIMA, include=TRUE}
+On a ainsi décidé de garder notre équation sur la qgam et de l'implémenter ensuite sur d'autres modèles. On a ainsi d'étudier les résidus. Ceci va ainsi nous permettre de ????
+```{r QGAM + Blocks résiduels , include=TRUE}
 
 ```
 
-```{r GAM + KALMAN, include=TRUE}
+Après avoir vu en cours les forêts aléatoires, on a décidé de l'implémenter sur ......
+```{r QGAM + RF, include=TRUE}
 
 ```
+Nous avons enfin appliqué arima sur les résultats obtenus, pour gagner en pécision. 
+```{r appliqcation de arima }
+ts_res_forecast <- ts(c(Block_residuals.ts, Data_test$Load-gam9.forecast),  frequency= 7)
+refit <- Arima(ts_res_forecast, model=fit.arima.res)
+prevARIMA.res <- tail(refit$fitted, nrow(Data_test))
+gam9.arima.forecast <- gam9.forecast + prevARIMA.res
+```
+
+Comme dernière méthode, nous avons décidé de mettre en place un aggrégation d'experts pour extraire une combinaison de prédicteurs qui puissent améliorer davantage la performance du modèle. Pour cela, nous avons regroupé les différents prédicteurs dans une variable experts, et nous avons....
+Nous avons également décidé d'ajouter un modèle additionnel utilisant le filtre kalman. Nous avions déjà essayer un tel élément, mais les résultats n'étaient pas tellement satisfaisants.  
+
 
