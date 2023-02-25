@@ -1,20 +1,38 @@
-
 ########################################################
 ########join with electricity data
 ########################################################
 rm(list=objects())
 ###############packages
+rmse = function(y, ychap, digits=0){
+  return(round(sqrt(mean((y-ychap)^2, na.rm=TRUE)), digits=digits))
+}
+
 library(mgcv)
 library(yarrr)
 library(magrittr)
 library(forecast)
+library(qgam)
 library(tidyverse)
 library(ranger)
 library(opera)
 source('R/score.R')
 
-Data_train <- read_delim("Data/train.csv", delim=",")
-Data_test<- read_delim("Data/test.csv", delim=",")
+
+load("Data/Data0.Rda")
+load("Data/Data1.Rda")
+WD = Data0$WeekDays
+index = which(Data0$GovernmentResponseIndex>=70)
+WD[index]="Saturday"
+Data0 = cbind(Data0,WD)
+
+WD = Data1$WeekDays
+index = which(Data1$GovernmentResponseIndex>=70)
+WD[index]="Saturday"
+Data1 = cbind(Data1, WD)
+
+Data_train = Data0
+Data_test = Data1
+
 Data_train$Time <- as.numeric(Data_train$Date)
 Data_test$Time <- as.numeric(Data_test$Date)
 names(Data_train)
@@ -199,9 +217,8 @@ lines(Data1$Date,rf.forecast, col='blue')
 ####################################################################################
 #####RF GAM
 #####################################################################################
-equation <- "Load~  s(toy,k=30, bs='cc') + s(Temp,k=10, bs='cr') + s(Load.1, bs='cr')+ 
-s(Load.7, bs='cr') +s(Temp_s99,k=10, bs='cr')+ WeekDays"
-gam9<-gam(equation%>%as.formula, data=Data0)
+equation <- "Load ~ Load.1:as.factor(WD) +WeekDays  + s(Temp_s99_max, Temp_s95_max)+s(Temp_s99_min, Temp_s95_min) + s(Load.7) + s(Time, k=7) + s(toy, k =30, bs = 'cc', by=as.factor(WD))"
+gam9<-qgam(equation%>%as.formula, data=Data0, qu=0.4)
 gam9.forecast <- predict(gam9, newdata=Data1)
 
 Nblock<-10
@@ -273,7 +290,7 @@ rf_gam$variable.importance%>%sort
 
 Block_residuals.ts <- ts(Block_residuals, frequency=7)
 fit.arima.res <- auto.arima(Block_residuals.ts,max.p=3,max.q=4, max.P=2, max.Q=2, trace=T,ic="aic", method="CSS")
-#Best model: ARIMA(3,0,4)(1,0,0)[7] with zero mean   
+#best model: ARIMA(1,0,2)(2,0,1)[7] with zero mean
 #saveRDS(fit.arima.res, "Results/tif.arima.res.RDS")
 ts_res_forecast <- ts(c(Block_residuals.ts, Data1$Load-gam9.forecast),  frequency= 7)
 refit <- Arima(ts_res_forecast, model=fit.arima.res)
@@ -284,7 +301,9 @@ gam9.arima.forecast <- gam9.forecast + prevARIMA.res
 ################################################################################################################
 ######## aggregation of  experts
 ################################################################################################################
+
 experts <- cbind(gam9.forecast, gam9.arima.forecast, rf.forecast, rf_gam.forecast)%>%as.matrix
+#colnames(experts) <- c("gam", "gamarima", "rf", "rfgam")
 
 Data <- read_delim("Data/train.csv", delim=",")
 ssm_dyn <- readRDS("Results/ssm_dyn2.RDS")
@@ -316,11 +335,9 @@ plot(Data1$GovernmentResponseIndex, lwd=2, type='l', axes=F, ylab='')
 legend("bottomleft", col=col, legend=colnames(experts), lty=1, bty='n')
 
 
-or <- oracle(Y=Data1$Load[1:60], experts[1:60,])
-or
-
 or <- oracle(Y=Data1$Load, experts)
 or
+
 
 #######bias correction
 expertsM2000 <- experts-2000
@@ -343,48 +360,16 @@ legend("bottomleft", col=col, legend=colnames(experts), lty=1, bty='n')
 or <- oracle(Y=Data1$Load, experts)
 or
 
-max(abs(Data1$Load-experts))
-
-eta <- sqrt(8*log(ncol(experts))/nrow(Data1))/100000000
-agg.ewa <- mixture(Y = Data1$Load, experts = experts, model = "EWA", loss.gradient=FALSE, parameters=list(eta=eta))
-summary(agg.ewa)
-plot(agg.ewa)
-
-agg.ewa2 <- mixture(Y = Data1$Load, experts = experts, model = "EWA", loss.gradient=FALSE)
-summary(agg.ewa2)
-plot(agg.ewa2)
-
-par(mfrow=c(1,1))
-plot(agg.ewa2$parameters$eta, type='l')
-
-
-agg.eg <- mixture(Y = Data1$Load, experts = experts, model = "EWA", loss.gradient=TRUE)
-summary(agg.eg)
-plot(agg.eg)
-
-par(mfrow=c(1,1))
-plot(agg.eg$parameters$eta, type='l')
-
 
 agg <- mixture(Y = Data1$Load, experts = experts, model = "MLpol", loss.gradient=FALSE)
 summary(agg)
 
-agg.grad <- mixture(Y = Data1$Load, experts = experts, model = "MLpol", loss.gradient=TRUE)
-summary(agg.grad)
+agg <- mixture(Y = Data1$Load, experts = experts, model = "MLpol", loss.gradient=TRUE)
+summary(agg)
 
-agg.boa.grad <- mixture(Y = Data1$Load, experts = experts, model = "BOA", loss.gradient=TRUE)
-summary(agg.boa.grad)
-
-par(mfrow=c(1,1))
-K <-ncol(experts)
-col <- rev(RColorBrewer::brewer.pal(n = max(min(K,11),4),name = "Spectral"))[1:min(K,11)]
-matplot(cumsum_exp, type='l', col=col, lty=1, lwd=2)
-
-lines(cumsum(Data1$Load-agg$prediction), lwd=4, col='brown', lty='dotted')
-lines(cumsum(Data1$Load-agg.grad$prediction), lwd=4, lty='dotted')
-
-
-plot(agg.grad)
+agg <- mixture(Y = Data1$Load, experts = experts, model = "BOA", loss.gradient=TRUE)
+summary(agg)
+plot(agg)
 
 
 ssm_dyn2 <- ssm_dyn
@@ -394,29 +379,11 @@ gam9.kalman.Dyn2 <- ssm_dyn2$pred_mean%>%tail(nrow(Data1))
 
 
 
-experts <- cbind(gam9.forecast, gam9.arima.forecast, rf.forecast, rf_gam.forecast, gam9.kalman.Dyn, gam9.kalman.Dyn2)%>%as.matrix
-nom_exp <- c("gam", "gamarima", "rf", "rfgam",  "kalman", "kalman2")
-expertsM2000 <- experts-2000
-expertsP2000 <- experts+2000
-experts <- cbind(experts, expertsM2000, expertsP2000)
-colnames(experts) <-c(nom_exp, paste0(nom_exp,  "M"), paste0(nom_exp,  "P"))
+experts <- cbind(experts, gam9.kalman.Dyn2)
+agg <- mixture(Y = Data1$Load, experts = experts, model = "MLpol", loss.gradient=TRUE)
+summary(agg)
 
-agg2 <- mixture(Y = Data1$Load, experts = experts, model = "MLpol", loss.gradient=TRUE)
-summary(agg2)
-plot(agg2)
-
-
-
-par(mfrow=c(1,1))
-K <-ncol(experts)
-col <- rev(RColorBrewer::brewer.pal(n = max(min(K,11),4),name = "Spectral"))[1:min(K,11)]
-matplot(cumsum_exp, type='l', col=col, lty=1, lwd=2)
-
-lines(cumsum(Data1$Load-agg$prediction), lwd=4, col='brown', lty='dotted')
-lines(cumsum(Data1$Load-agg.grad$prediction), lwd=4, lty='dotted')
-lines(cumsum(Data1$Load-agg2$prediction), lwd=4, lty='dotted', col='blue')
-
-
+plot(agg)
 
 
 ##################################################################################################################################
@@ -582,6 +549,14 @@ rf <- ranger(equation, data=Data0, importance =  'permutation') # Error: Missing
 
 
 
+
+
+
+
+
+
+
+
 library(mobForest)
 
 
@@ -604,11 +579,11 @@ rfout <- mobforest.analysis(form, , partition_vars=partition_vars, mobforest_con
 
 
 form <- as.formula(Load ~Load.1)
-partition_vars <- c("Load.1")
+partition_vars <- c("toy")
 
-rfout <- mobforest.analysis(form, , partition_vars=partition_vars, mobforest_controls = mobforest.control(ntree = 10, mtry = 1, 
+rfout <- mobforest.analysis(form, , partition_vars=partition_vars, mobforest_controls = mobforest.control(ntree = 10, mtry = 2, 
                             replace = TRUE, alpha = 0.05, bonferroni = TRUE, minsplit = 10), data = Data0,
-                            processors = 1, model = linearModel, seed = 1111, new_test_data=Data1)
+                            processors = 1, model = linearModel, seed = 1111)
 
 
 
