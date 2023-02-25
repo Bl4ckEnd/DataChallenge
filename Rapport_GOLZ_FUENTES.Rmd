@@ -65,25 +65,25 @@ Dans la suite, nous avons ainsi considéré de mettre en place des Modèles Addi
 ```{r GA Models, include=TRUE}
 #mettre
 ```
-Pour améliorer le rendement du modèle gam, nous avons utilisé la fonction gam.check. Celle-ci nous a permis d'ajuster la dimension des bases spline. Nous avons ainsi incrémenté les valeurs de k quand la p-value était très petite. Pour la variable toy, on a !!!!!!
-
+Pour améliorer le rendement du modèle, nous avons tenté de comprendre l'origine des erreurs à partir des courbes de consommation. Nous avons constaté que les erreurs commencent à s'accentuer au niveau du mois de mars 2020, juste au niveau du début de la période Covid. Nous avons ainsi considéré la création de la variable WD [AJOUTER ICI variable WD?]. Nous avons également utilisé la fonction gam.check pour améliorer le rendement du modèle gam. Celle-ci nous a permis d'ajuster la dimension des bases spline. Nous avons ainsi incrémenté les valeurs de k quand la p-value était très petite. Pour la variable toy, on a !!!!!!
+Nous avons également vérifié que les résidus étaient bien gaussiens à chaque fois à partir de l'histogramme issu du plot. 
 ```{r gam.check, include=TRUE}
 #mettre code
 ```
 
 
-
-Dans la suite on utilisera le package qgam, et en particulier la fonction qgam. Celle-ci est performe une régression quantile. En fixant le quantile à 0.4, on a changé la fonction de perte. On a ainsi introduit un biais, qui permet de s'ajuster mieux aux données du covid.  
+Dans la suite on utilisera le package qgam, et en particulier la fonction qgam. Celle-ci ajuste un modèle additif ainsi qu'une régréssion quantile sur un unique quantile. On utilise ici la même equation qu'auparavant, il suffit juste d'ajuster la variable "qu", correspondant au quantile. Après plusieurs essais, nous avons remarqué qu'on obtenait des meilleurs résultats avec "qu" autuours de 0.4. En effet, en fixant le quantile à 0.4, on change la fonction de perte. On introduit ainsi un biais, qui permet de s'ajuster mieux aux données lors de la période du covid.  
 ```{r GAM + quantile regression, include=TRUE}
 #mettre
 ```
 
+Étant arrivés au bout des amélioration de qgam, nous avons considérer d'autres modèles vus en cours pour comparer les performances. 
 On a ainsi décidé de garder notre équation sur la qgam et de l'implémenter ensuite sur d'autres modèles. On a ainsi d'étudier les résidus. Ceci va ainsi nous permettre de ????
 ```{r QGAM + Blocks résiduals , include=TRUE}
 #mettre
 ```
 
-Après avoir vu en cours les forêts aléatoires, on a décidé de l'implémenter sur ......
+Nous avons ainsi décidé de tester les forêts aléatoires. 
 ```{r QGAM + RF, include=TRUE}
 #mettre
 ```
