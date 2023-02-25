@@ -3,13 +3,16 @@ title: "Modélisation Prédictive Rapport"
 author: "Valentin Gölz, Laura Fuentes"
 date: "February 14, 2023"
 output:
-  pdf_document: default
+  pdf_document: 
+    toc : true
+    template: default
   html_document:
     df_print: paged
 ---
-
-Le premier reflèxe est ici de télécharger l'ensemble des packages dont on fera usage lors du développement des différents modèles.  
-# This is bigger text
+\newpage
+# Introduction
+Nous avons un jeu de données regroupant différents variables en rapport avec la consommation énérgétique française pendant la période de 2012 à 2021. Le but ici est de construire un modèle qui permettant de prédire la consommation française en énergie pendant la période du Covid. \\
+Le premier reflèxe est ici de télécharger l'ensemble des packages dont on fera usage lors du développement des différents modèles. Nous avons également divisé le set train en deux pour pouvoir tester nos modèles avant de les soumettre. Nous avons ainsi choisi la période de 2012 - 2019 comme train et 2019-2020 (mars) comme test.
 ```{r preparation, include=FALSE}
 rm(list=objects())
 
@@ -23,7 +26,8 @@ library(ranger)
 library(opera)
 ```
 
-On télécharge ensuite les deux jeux de données
+# Notre jeu de données
+On télécharge ensuite les deux jeux de données train et test déjà modifiés. Ces modifications consistent en des ajouts de variables. Nous avons d'une part recupéré les différents mouvements sociaux et le pourcentage de population mobilisée. Ensuite nous avons créée une variable mesurant la température ressentie. Le problème de cette dernière variable concernait les nombreuses valeurs NA's, ainsi que la représentativité au niveau national des stations météorologiques constituant le jeu de données. Nous avons également, la variable WeekDays2. Il s'agit d'une version modifiée de la variable WeekDays qui distingue les jours laborales, samedis et dimanches.  Enfin, nous avons pensé à comment implémenter l'effet du Covid sur le modèle. En effet, en rajoutant la variable GovernementResponseIndex on avait des très mauvais résultats. Ceci s'explique du fait que la variable comprends des valeurs nulles pendant des années, et celles-ci explosent dans une courte période d'un mois, laissant peu de temps d'entrainement sur la pandémie. Pour simuler le comportement de la population pendant le confinement avec les données que l'on avait déjà, nous avons pensé aux samedis. En effet, nous avons mis l'hypothèse qu'un jour de confinement était comparable en termes de consommation à un jour de weekend comme un samedi. Dans cet esprit, nous avons créé la variable WD, qui modifie le jour de la semaine à samedi s'il y a confinement (la GovernementResponseIndex>=70), et maintien des jours de la semaine sinon. 
 ```{r Téléchargement des données, echo=TRUE}
 load("Data/Data0.Rda")
 load("Data/Data1.Rda")
@@ -33,30 +37,55 @@ sel_b <- which(Data0$Year>2019)
 
 ```
 
-Le but ici est de construire un modèle qui permettant de prédire la consommation française en énergie pendant la période du Covid. 
-Pour comprendre et apprehender le cadre d'étude on commencera par effectuer un modèle simple. C'est-à-dire un modèle linéaire à deux covariables, une quantitative et une autre catégorique. La variable WeekDays2 est une version modifiée de la variable WeekDays qui distingue les jours laborales, samedis et dimanches. 
+
+# Choix de variables: 
+
+Pour comprendre quelles variables sont plus significatives, et argumenter le choix des variables, nous allons effectuer une random forest, et regarder l'importance des variables.  
+````{Choix des variables avec random forest}
+### METTRE CODE ICI
+
+````
+
+Nous pouvons ainsi bien remarquer que les variables à plus forte importance sont: 
+Load.1, Load.7, les variables relatives à la temperature, WeekDays, WD, BH toy, Summer_break, DLS and Christmas_break. Nous avons vérifié ce résultat à l'aide de ANOVA. !!!!!!!!!! 
+
+# Choix du type de modèle 
+Pour comprendre et apprehender le cadre d'étude on commencera par effectuer un modèle simple. C'est-à-dire un modèle linéaire avec les covariables choisies précédamment. Nous avons considéré que la consommation de la veille changeait en fonction du jour de la semaine. C'est pour cela que nous avons décidé de créer une fonction de la consommation de la veille en fonction de chaque catégorie de WeekDays.
 ```{r Linear Models, echo=TRUE}
 mod1 = lm(Load~WeekDays2+Temp, data=Data0[sel_a,])
 summary(mod1)
 ```
-Pour construire l'équation, nous nous commes d'une part concentrés sur le poids des coefficients au niveau de la régression linéaire. D'autre part on a considéré les effets des jours de la semaine sur la consommation du jour précédent. 
-```{r GA Models, include=TRUE}
 
+Nous avons mis en place des transformations polynomiales sur le modèle linéaire comme une première approche de compléxification du modèle.  
+```{r Linear Models avec transformations polynomiales, echo=TRUE}
+#mettre
 ```
+
+Dans la suite, nous avons ainsi considéré de mettre en place des Modèles Additifs généralisés. Pour cela, nous avons d'abord distingué les variables à mettre dans la partie linéaire du modèle, puis dans la partie spline. Nous avons intégré ainsi les variables qualitatives ainsi que la consommation de la veille en fonction du jours de la semaine dans la partie linéaire. On a ajouté ainsi dans la partie spline les variables ayant une notion de temporalité comme la consommation de la semaine ou les températures. Nous avons également regroupé dans un même spline des variables ayant une relation logique, comme c'est le cas de la température et le Temps ou les Temperatures_s99 min et max. Nous avons également crée une fonction spline pour chaque jour de la semaine pour la variable toy pour ne pas négliger l'effet des jours de la semaine sur la consommation annuelle. 
+```{r GA Models, include=TRUE}
+#mettre
+```
+Pour améliorer le rendement du modèle gam, nous avons utilisé la fonction gam.check. Celle-ci nous a permis d'ajuster la dimension des bases spline. Nous avons ainsi incrémenté les valeurs de k quand la p-value était très petite. Pour la variable toy, on a !!!!!!
+
+```{r gam.check, include=TRUE}
+#mettre code
+```
+
+
 
 Dans la suite on utilisera le package qgam, et en particulier la fonction qgam. Celle-ci est performe une régression quantile. En fixant le quantile à 0.4, on a changé la fonction de perte. On a ainsi introduit un biais, qui permet de s'ajuster mieux aux données du covid.  
 ```{r GAM + quantile regression, include=TRUE}
-
+#mettre
 ```
 
 On a ainsi décidé de garder notre équation sur la qgam et de l'implémenter ensuite sur d'autres modèles. On a ainsi d'étudier les résidus. Ceci va ainsi nous permettre de ????
 ```{r QGAM + Blocks résiduals , include=TRUE}
-
+#mettre
 ```
 
 Après avoir vu en cours les forêts aléatoires, on a décidé de l'implémenter sur ......
 ```{r QGAM + RF, include=TRUE}
-
+#mettre
 ```
 Nous avons enfin appliqué arima sur les résultats obtenus, pour gagner en pécision. 
 ```{r appliqcation de arima }
