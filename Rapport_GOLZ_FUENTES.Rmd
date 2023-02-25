@@ -3,6 +3,7 @@ title: "Modélisation Prédictive Rapport"
 author: "Valentin Gölz, Laura Fuentes"
 date: "February 14, 2023"
 output:
+  pdf_document: default
   html_document:
     df_print: paged
 ---
@@ -49,7 +50,7 @@ Dans la suite on utilisera le package qgam, et en particulier la fonction qgam. 
 ```
 
 On a ainsi décidé de garder notre équation sur la qgam et de l'implémenter ensuite sur d'autres modèles. On a ainsi d'étudier les résidus. Ceci va ainsi nous permettre de ????
-```{r QGAM + Blocks résiduels , include=TRUE}
+```{r QGAM + Blocks résiduals , include=TRUE}
 
 ```
 
@@ -59,10 +60,10 @@ Après avoir vu en cours les forêts aléatoires, on a décidé de l'implémente
 ```
 Nous avons enfin appliqué arima sur les résultats obtenus, pour gagner en pécision. 
 ```{r appliqcation de arima }
-ts_res_forecast <- ts(c(Block_residuals.ts, Data_test$Load-gam9.forecast),  frequency= 7)
-refit <- Arima(ts_res_forecast, model=fit.arima.res)
-prevARIMA.res <- tail(refit$fitted, nrow(Data_test))
-gam9.arima.forecast <- gam9.forecast + prevARIMA.res
+#ts_res_forecast <- ts(c(Block_residuals.ts, Data_test$Load-gam9.forecast),  frequency= 7)
+#refit <- Arima(ts_res_forecast, model=fit.arima.res)
+#prevARIMA.res <- tail(refit$fitted, nrow(Data_test))
+#gam9.arima.forecast <- gam9.forecast + prevARIMA.res
 ```
 
 Comme dernière méthode, nous avons décidé de mettre en place un aggrégation d'experts pour extraire une combinaison de prédicteurs qui puissent améliorer davantage la performance du modèle. Pour cela, nous avons regroupé les différents prédicteurs dans une variable experts, et nous avons....
