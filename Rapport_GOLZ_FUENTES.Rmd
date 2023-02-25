@@ -83,11 +83,12 @@ On a ainsi décidé de garder notre équation sur la qgam et de l'implémenter e
 #mettre
 ```
 
-Nous avons ainsi décidé de tester les forêts aléatoires. 
+Nous avons ainsi décidé de tester les forêts aléatoires sur les résidus de qgam + BlockResiduals. 
 ```{r QGAM + RF, include=TRUE}
 #mettre
 ```
-Nous avons enfin appliqué arima sur les résultats obtenus, pour gagner en pécision. 
+
+Nous avons enfin appliqué arima sur les résultats obtenus, pour gagner en précision et aboutir à un modèle très robuste. 
 ```{r appliqcation de arima }
 #ts_res_forecast <- ts(c(Block_residuals.ts, Data_test$Load-gam9.forecast),  frequency= 7)
 #refit <- Arima(ts_res_forecast, model=fit.arima.res)
@@ -95,7 +96,9 @@ Nous avons enfin appliqué arima sur les résultats obtenus, pour gagner en péc
 #gam9.arima.forecast <- gam9.forecast + prevARIMA.res
 ```
 
-Comme dernière méthode, nous avons décidé de mettre en place un aggrégation d'experts pour extraire une combinaison de prédicteurs qui puissent améliorer davantage la performance du modèle. Pour cela, nous avons regroupé les différents prédicteurs dans une variable experts, et nous avons....
-Nous avons également décidé d'ajouter un modèle additionnel utilisant le filtre kalman. Nous avions déjà essayer un tel élément, mais les résultats n'étaient pas tellement satisfaisants.  
+Comme dernière méthode, nous avons décidé de mettre en place un aggrégation d'experts pour extraire une combinaison de prédicteurs qui puissent améliorer davantage la performance du modèle. Pour cela, nous avons regroupé les différents prédicteurs dans une variable experts. Dans cette aggrégation d'experts, nous avons utilisé les différents modèles qgam (avec et sans arima), une forêt aléatoire comprenant toutes les variables, ainsi qu'un filtre kalman. Nous avions déjà essayer un tel élément, mais les résultats n'étaient pas assez satisfaisants.  
+Le modèle obtenu par combinaison des différents prédicteurs obtient une performance bien meilleure que celle obtenue auparavant. 
 
+
+%%% A Rajouter les critères utilisés pour des bons modèles. 
 
