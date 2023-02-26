@@ -54,7 +54,7 @@ Data1 <- Data_train[sel_b, ]
 ####Best submission so far!!!!! ---> 567.24 
 
 #On definit l'equation
-equation <- "Load ~ Load.1:as.factor(WeekDays) + BH + Christmas_break + Summer_break + DLS + s(Temp) + s(Temp_s99_max, Temp_s99_min)+ s(Load.7) + s(Time, k=7) + s(toy, k =30, bs = 'cc', by=as.factor(WD))+ s(Temp, Time, k=20)"
+equation <- "Load ~ Load.1:as.factor(WD) + BH + Christmas_break + Summer_break + DLS + s(Temp) + s(Temp_s99_max, Temp_s99_min)+ s(Load.7) + s(Time, k=7) + s(toy, k =30, bs = 'cc', by=as.factor(WD))+ s(Temp, Time, k=20)"
 
 #On fait une qgam
 gam9<-qgam(equation%>%as.formula, data=Data_train, qu=0.4)
@@ -121,8 +121,7 @@ Data1_rf$res.48 <- c(residuals[1], residuals[1:(length(residuals)-1)])
 Data1_rf$res.336 <- c(residuals[1:7], residuals[1:(length(residuals)-7)])
 
 #On fait appel à cov: ??? A COMPRENDRE 
-cov <- "Time + toy + Temp + Load.1 + Load.7 + Temp_s99 + WeekDays + BH + Temp_s95_max + Temp_s99_max + Summer_break  + Christmas_break + 
-Temp_s95_min +Temp_s99_min + DLS + GovernmentResponseIndex + res.48 + res.336 +"
+cov <- "Time + toy + Temp + Load.1 + Load.7 + WD + BH + Temp_s99_min + Temp_s99_max + Summer_break  + Christmas_break  + DLS + res.48 + res.336 +"
 gterm <-paste0("gterms_", c(1:ncol(terms0)))
 gterm <- paste0(gterm, collapse='+')
 cov <- paste0(cov, gterm, collapse = '+')
@@ -151,12 +150,31 @@ gam9.arima.forecast <- gam9.forecast + prevARIMA.res
 #submit$Load <- gam9.arima.forecast
 #write.table(submit, file="Data/submission_qgamL16.csv", quote=F, sep=",", dec='.',row.names = F)
 
+###Random forest : 
+formule <- "Load ~ Month + Temp_s95_min + Temp_s95_max + HI + TauxPopMovement +Time + toy + Temp + Load.1 + Load.7 + WD + BH + Temp_s99_min + Temp_s99_max + Summer_break  + Christmas_break  + DLS"
+
+rf<- ranger::ranger(formule, data = Data_train, importance =  'permutation')
+rf.forecast <- predict(rf, data = Data_test)$predictions
+
+plot(Data_test$Load, type='l')
+lines(rf.forecast, type='l', col='red')
+
+#Boosting
+#TRY HERE
+
+#Other qgam
+gam5<-qgam(equation%>%as.formula, data=Data_train, qu=0.5)
+gam5.forecast <- predict(gam5, newdata=Data_test)
+
+gam6<-qgam(equation%>%as.formula, data=Data_train, qu=0.6)
+gam6.forecast <- predict(gam6, newdata=Data_test)
+
 ################################################################################################################
 ######## aggregation of  experts
 ################################################################################################################
 
-experts <- cbind(gam9.forecast, gam9.arima.forecast, rf_gam.forecast)%>%as.matrix
-#colnames(experts) <- c("gam", "gamarima", "rf", "rfgam")
+experts <- cbind(gam9.forecast, gam9.arima.forecast, rf_gam.forecast ,rf.forecast, gam5.forecast, gam6.forecast)%>%as.matrix
+#colnames(experts) <- c("gam", "gamarima", "rf")
 
 
 Data <- rbind(Data_train, Data_test[,-21])
@@ -179,7 +197,7 @@ ssm_dyn <- predict(ssm_dyn, X, y, type='model', compute_smooth = TRUE)
 gam9.kalman.Dyn <- ssm_dyn$pred_mean%>%tail(nrow(Data_test))
 
 experts <- cbind(experts, gam9.kalman.Dyn)
-nom_exp <- c("gam", "gamarima", "rfgam",  "kalman")
+nom_exp <- c("gam", "gamarima", "rf", "rfgam",  "kalman", "gam5", "gam6")
 colnames(experts) <-  nom_exp
 rmse_exp <- apply(experts, 2, rmse, y=Data_test$Load)
 sort(rmse_exp)
@@ -198,12 +216,12 @@ legend("bottomleft", col=col, legend=colnames(experts), lty=1, bty='n')
 or <- oracle(Y=Data_test$Load, experts)
 or
 
-#Gives a pretty nice score: 1624 (best so far) ---> maybe interesting to submit it ?
-rmse(or$prediction, y=Data_test$Load)
+#Gives a pretty nice score: 1502 (best so far) ---> maybe interesting to submit it ?
+rmse(or$prediction[1:274], y=Data_test$Load[1:274])
 
 #######bias correction
-expertsM2000 <- experts-2000
-expertsP2000 <- experts+2000
+expertsM2000 <- experts-3000
+expertsP2000 <- experts+3000
 experts <- cbind(experts, expertsM2000, expertsP2000)
 colnames(experts) <-c(nom_exp, paste0(nom_exp,  "M"), paste0(nom_exp,  "P"))
 
@@ -219,11 +237,12 @@ plot(Data_test$GovernmentResponseIndex, lwd=2, type='l', axes=F, ylab='')
 legend("bottomleft", col=col, legend=colnames(experts), lty=1, bty='n')
 
 
-or <- oracle(Y=Data_test$Load, experts)
+or <- oracle(Y=Data_test$Load, expertsP2000)
 or
 
 plot(or$prediction, type='l', col='red')
 lines(Data_test$Load, type='l')
+rmse(Data_test$Load[1:274], or$prediction[1:274])
 
 #Meh
 agg <- mixture(Y = Data_test$Load, experts = experts, model = "BOA", loss.gradient=TRUE)
@@ -236,14 +255,14 @@ ssm_dyn2 <- predict(ssm_dyn2, X, y, type='model', compute_smooth = TRUE)
 gam9.kalman.Dyn2 <- ssm_dyn2$pred_mean%>%tail(nrow(Data_test))
 
 experts <- cbind(experts, gam9.kalman.Dyn2)
-agg <- mixture(Y = Data_test$Load, experts = experts, model = "BOA", loss.gradient=TRUE)
+agg <- mixture(Y = Data_test$Load, experts = experts, loss.gradient=TRUE)
 summary(agg)
 
 plot(agg$prediction, type='l', col='red')
 lines(Data_test$Load, type='l')
 
-rmse(Data_test$Load, ychap = or$prediction)
-rmse(Data_test$Load, ychap = agg$prediction)
+rmse(Data_test$Load[1:274], ychap = or$prediction[1:274])
+rmse(Data_test$Load[1:274], ychap = agg$prediction[1:274])
 
 ##### SUBMISSION qgamL17 : has the lowest score (except from oracle)
 #submit <- read_delim( file="Data/sample_submission.csv", delim=",")
@@ -252,7 +271,7 @@ rmse(Data_test$Load, ychap = agg$prediction)
 
 ##### SUBMISSION qgamL18 : oracle, but idk if it's cheating :)
 #LOWEST SCORE ON THE WHOLE TEST THING :) 
-submit <- read_delim( file="Data/sample_submission.csv", delim=",")
-submit$Load <- or$prediction
-write.table(submit, file="Data/submission_qgamL18.csv", quote=F, sep=",", dec='.',row.names = F)
+#submit <- read_delim( file="Data/sample_submission.csv", delim=",")
+#submit$Load <- or$prediction
+#write.table(submit, file="Data/submission_qgamL18.csv", quote=F, sep=",", dec='.',row.names = F)
 
