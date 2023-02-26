@@ -13,33 +13,20 @@ help("mgcv-package")
 
 ### try the same with qgam and add "mood WeekDays" :
 
-'''
-mod0 <- qgam(Load ~ Load.1:as.factor(WeekDays) + BH + Christmas_break
-             + Summer_break + DLS + s(Temp) + s(Temp_s99_max, Temp_s99_min)
-             + s(Load.7) + s(Time, k=7) + s(toy, k =30, bs = "cc", by=as.factor(WD))
-             + s(Temp, Time, k=20), 
-             data=Data00, qu=0.4)
 
-gam.check(mod0)
-qgam.pred <- predict(mod0, Data11)
-'''
+# mod0 <- qgam(Load ~ Load.1:as.factor(WeekDays) + BH + Christmas_break
+#             + Summer_break + DLS + s(Temp) + s(Temp_s99_max, Temp_s99_min)
+#             + s(Load.7) + s(Time, k=7) + s(toy, k =30, bs = "cc", by=as.factor(WD))
+#             + s(Temp, Time, k=20), 
+#             data=Data00, qu=0.4)
+
+#gam.check(mod0)
+#qgam.pred <- predict(mod0, Data11)
+
 
 ############ APPLICATION A TOUT LE JEU DE DONNÉES
 load("Data/Data0.Rda")
 load("Data/Data1.Rda")
-
-Data0$Time <- as.numeric(Data0$Date)
-
-WD = Data0$WeekDays
-index = which(Data0$GovernmentResponseIndex>=70)
-WD[index]="Saturday"
-Data0 = cbind(Data0,WD)
-
-WD = Data1$WeekDays
-index = which(Data1$GovernmentResponseIndex>=70)
-WD[index]="Saturday"
-Data1 = cbind(Data1, WD)
-
 
 equation <- "Load ~ Load.1:as.factor(WeekDays) + BH + Christmas_break + Summer_break + DLS + s(Temp) + s(Temp_s99_max, Temp_s99_min)+ s(Load.7) + s(Time, k=7) + s(toy, k =30, bs = 'cc', by=as.factor(WD))+ s(Temp, Time, k=20)"
 
