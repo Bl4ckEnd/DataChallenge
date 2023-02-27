@@ -1,13 +1,13 @@
 ---
 title: "Modélisation Prédictive Rapport"
 author: "Valentin Gölz, Laura Fuentes"
-date: "February 14, 2023"
+date: "February 28, 2023"
 output:
+  html_document:
+    df_print: paged
   pdf_document: 
     toc : true
     template: default
-  html_document:
-    df_print: paged
 ---
 \newpage
 ## Introduction
@@ -29,8 +29,8 @@ library(opera)
 ## Notre jeu de données
 On télécharge ensuite les deux jeux de données train et test déjà modifiés. Ces modifications consistent en des ajouts de variables. Nous avons d'une part recupéré les différents mouvements sociaux et le pourcentage de population mobilisée. Ensuite nous avons créée une variable mesurant la température ressentie. Le problème de cette dernière variable concernait les nombreuses valeurs NA's, ainsi que la représentativité au niveau national des stations météorologiques constituant le jeu de données. Nous avons également, la variable WeekDays2. Il s'agit d'une version modifiée de la variable WeekDays qui distingue les jours laborales, samedis et dimanches.  Enfin, nous avons pensé à comment implémenter l'effet du Covid sur le modèle. En effet, en rajoutant la variable GovernementResponseIndex on avait des très mauvais résultats. Ceci s'explique du fait que la variable comprends des valeurs nulles pendant des années, et celles-ci explosent dans une courte période d'un mois, laissant peu de temps d'entrainement sur la pandémie. Pour simuler le comportement de la population pendant le confinement avec les données que l'on avait déjà, nous avons pensé aux samedis. En effet, nous avons mis l'hypothèse qu'un jour de confinement était comparable en termes de consommation à un jour de weekend comme un samedi. Dans cet esprit, nous avons créé la variable WD, qui modifie le jour de la semaine à samedi s'il y a confinement (la GovernementResponseIndex>=70), et maintien des jours de la semaine sinon. 
 ```{r Téléchargement des données, echo=TRUE}
-load("Data/Data0.Rda")
-load("Data/Data1.Rda")
+load("../Data/Data0.Rda")
+load("../Data/Data1.Rda")
 
 sel_a <- which(Data0$Year<=2019)
 sel_b <- which(Data0$Year>2019)
@@ -41,13 +41,36 @@ sel_b <- which(Data0$Year>2019)
 ## Choix de variables: 
 
 Pour comprendre quelles variables sont plus significatives, et argumenter le choix des variables, nous allons effectuer une random forest, et regarder l'importance des variables.  
-````{Choix des variables avec random forest}
+````{r Choix des variables avec random forest, echo=FALSE}
 ### METTRE CODE ICI
+equation <- "Load~  Time + toy + Temp + Load.1 + Load.7 + Temp_s99 + WeekDays + BH + Temp_s95_max + 
+  Temp_s99_max + Summer_break  + Christmas_break + 
+  Temp_s95_min +Temp_s99_min + DLS + GovernmentResponseIndex + TauxPopMovement + Movement + HI + WD"
+rf <- ranger(equation, data=Data0, importance =  'permutation')
 
+#############importance plot
+imp <- rf$variable.importance
+imp <- sort(imp)
+o <- order(imp, decreasing=T)
+nom <- names(imp)
+plot(c(1:length(imp)), imp[o], type='h', ylim = c(0, max(imp) + max(imp)/5), xlab='', ylab='Importance (permutation)')
+K <- length(imp)
+text(tail(c(1:length(imp)), K), tail(imp[o]+max(imp/8), K), labels= tail(nom[o], K), pos=3, srt=90, adj=1, cex=0.6)
+points(c(1:length(imp)), imp[o], pch=20)
 ````
-
+## Anova
 Nous pouvons ainsi bien remarquer que les variables à plus forte importance sont: 
-Load.1, Load.7, les variables relatives à la temperature, WeekDays, WD, BH toy, Summer_break, DLS and Christmas_break. Nous avons vérifié ce résultat à l'aide de ANOVA. !!!!!!!!!! 
+Load.1, Load.7, les variables relatives à la temperature, WeekDays, WD, BH, toy, Summer_break, DLS and Christmas_break. Nous avons vérifié ce résultat à l'aide de ANOVA.
+
+```{r}
+formula1 <- "Load ~ Temp + WeekDays + WD + BH+ toy + Summer_break + DLS + Christmas_break"
+formula2 <- "Load ~ Temp + WeekDays + WD + BH+ toy + Summer_break + DLS + Christmas_break + Movement"
+small_lm <- lm(formula1%>%as.formula, data=Data0)
+large_lm <- lm(formula2%>%as.formula, data=Data0)
+anova.res <- anova(small_lm, large_lm)
+summary(anova.res)
+```
+
 
 # Choix du type de modèle 
 Pour comprendre et apprehender le cadre d'étude on commencera par effectuer un modèle simple. C'est-à-dire un modèle linéaire avec les covariables choisies précédamment. Nous avons considéré que la consommation de la veille changeait en fonction du jour de la semaine. C'est pour cela que nous avons décidé de créer une fonction de la consommation de la veille en fonction de chaque catégorie de WeekDays.
