@@ -10,7 +10,7 @@ output:
     df_print: paged
 ---
 \newpage
-# Introduction
+## Introduction
 Nous avons un jeu de données regroupant différents variables en rapport avec la consommation énérgétique française pendant la période de 2012 à 2021. Le but ici est de construire un modèle qui permettant de prédire la consommation française en énergie pendant la période du Covid. \\
 Le premier reflèxe est ici de télécharger l'ensemble des packages dont on fera usage lors du développement des différents modèles. Nous avons également divisé le set train en deux pour pouvoir tester nos modèles avant de les soumettre. Nous avons ainsi choisi la période de 2012 - 2019 comme train et 2019-2020 (mars) comme test.
 ```{r preparation, include=FALSE}
@@ -26,7 +26,7 @@ library(ranger)
 library(opera)
 ```
 
-# Notre jeu de données
+## Notre jeu de données
 On télécharge ensuite les deux jeux de données train et test déjà modifiés. Ces modifications consistent en des ajouts de variables. Nous avons d'une part recupéré les différents mouvements sociaux et le pourcentage de population mobilisée. Ensuite nous avons créée une variable mesurant la température ressentie. Le problème de cette dernière variable concernait les nombreuses valeurs NA's, ainsi que la représentativité au niveau national des stations météorologiques constituant le jeu de données. Nous avons également, la variable WeekDays2. Il s'agit d'une version modifiée de la variable WeekDays qui distingue les jours laborales, samedis et dimanches.  Enfin, nous avons pensé à comment implémenter l'effet du Covid sur le modèle. En effet, en rajoutant la variable GovernementResponseIndex on avait des très mauvais résultats. Ceci s'explique du fait que la variable comprends des valeurs nulles pendant des années, et celles-ci explosent dans une courte période d'un mois, laissant peu de temps d'entrainement sur la pandémie. Pour simuler le comportement de la population pendant le confinement avec les données que l'on avait déjà, nous avons pensé aux samedis. En effet, nous avons mis l'hypothèse qu'un jour de confinement était comparable en termes de consommation à un jour de weekend comme un samedi. Dans cet esprit, nous avons créé la variable WD, qui modifie le jour de la semaine à samedi s'il y a confinement (la GovernementResponseIndex>=70), et maintien des jours de la semaine sinon. 
 ```{r Téléchargement des données, echo=TRUE}
 load("Data/Data0.Rda")
@@ -38,7 +38,7 @@ sel_b <- which(Data0$Year>2019)
 ```
 
 
-# Choix de variables: 
+## Choix de variables: 
 
 Pour comprendre quelles variables sont plus significatives, et argumenter le choix des variables, nous allons effectuer une random forest, et regarder l'importance des variables.  
 ````{Choix des variables avec random forest}
@@ -77,24 +77,15 @@ Dans la suite on utilisera le package qgam, et en particulier la fonction qgam. 
 #mettre
 ```
 
+## Pipeline basée sur le modèle qgam
 Étant arrivés au bout des amélioration de qgam, nous avons considérer d'autres modèles vus en cours pour comparer les performances. 
-On a ainsi décidé de garder notre équation sur la qgam et de l'implémenter ensuite sur d'autres modèles. On a ainsi d'étudier les résidus. Ceci va ainsi nous permettre de ????
-```{r QGAM + Blocks résiduals , include=TRUE}
+On a ainsi décidé de garder notre équation sur la qgam et de l'implémenter ensuite sur d'autres modèles. On a ainsi d'étudier les résidus. Ceci va ainsi nous permettre de ???? \\
+Nous avons ainsi décidé de tester les forêts aléatoires sur les résidus de qgam. Après avoir appliqué l'effet des forêts aléatoires sur le modèle, nous avons amélioré davantage la performance à l'aide de Arima. 
+```{r QGAM + Blocks résiduals + RF + Arima , include=TRUE}
 #mettre
 ```
 
-Nous avons ainsi décidé de tester les forêts aléatoires sur les résidus de qgam + BlockResiduals. 
-```{r QGAM + RF, include=TRUE}
-#mettre
-```
-
-Nous avons enfin appliqué arima sur les résultats obtenus, pour gagner en précision et aboutir à un modèle très robuste. 
-```{r appliqcation de arima }
-#ts_res_forecast <- ts(c(Block_residuals.ts, Data_test$Load-gam9.forecast),  frequency= 7)
-#refit <- Arima(ts_res_forecast, model=fit.arima.res)
-#prevARIMA.res <- tail(refit$fitted, nrow(Data_test))
-#gam9.arima.forecast <- gam9.forecast + prevARIMA.res
-```
+## Aggrégation d'experts 
 
 Comme dernière méthode, nous avons décidé de mettre en place un aggrégation d'experts pour extraire une combinaison de prédicteurs qui puissent améliorer davantage la performance du modèle. Pour cela, nous avons regroupé les différents prédicteurs dans une variable experts. Dans cette aggrégation d'experts, nous avons utilisé les différents modèles qgam (avec et sans arima), une forêt aléatoire comprenant toutes les variables, ainsi qu'un filtre kalman. Nous avions déjà essayer un tel élément, mais les résultats n'étaient pas assez satisfaisants.  
 Le modèle obtenu par combinaison des différents prédicteurs obtient une performance bien meilleure que celle obtenue auparavant. 
