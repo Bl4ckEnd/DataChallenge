@@ -194,7 +194,7 @@ block_list[[l-1]]<-c(borne_block[l-1]:(borne_block[l]))
 
 blockRMSE<-function(equation, block)
 {
-  g<- gam(as.formula(equation), data=Data_train[-block,])
+  g<- qgam(as.formula(equation), data=Data_train[-block,], qu=0.4)
   forecast<-predict(g, newdata=Data_train[block,])
   return(forecast)
 } 
@@ -241,7 +241,8 @@ rf_gam$variable.importance%>%sort
 
 Block_residuals.ts <- ts(Block_residuals, frequency=7)
 fit.arima.res <- auto.arima(Block_residuals.ts,max.p=3,max.q=4, max.P=2, max.Q=2, trace=T,ic="aic", method="CSS")
-#Best model: ARIMA(1,1,2)(2,0,2)[7]
+#Best model: ARIMA(1,1,2)(2,0,2)[7] with block using gam
+# Best model: ARIMA(1,0,3)(2,0,0)[7] with qgam
 #saveRDS(fit.arima.res, "Results/tif.arima.res.RDS")
 ts_res_forecast <- ts(c(Block_residuals.ts, Data_test$Load-gam9.forecast),  frequency= 7)
 refit <- Arima(ts_res_forecast, model=fit.arima.res)
@@ -255,9 +256,29 @@ gam9.arima.forecast <- gam9.forecast + prevARIMA.res
 #write.table(submit, file="Data/submission_qgamL16.csv", quote=F, sep=",", dec='.',row.names = F)
 
 
+formula <- "Load ~Load.1 + WeekDays + Load.7 + Temp  + Temp_s99_max + Temp_s99_min + WeekDays + WD + BH+ toy + Summer_break + DLS + Christmas_break + HI "
+slm <- lm(formula%>%as.formula, data=Data_train)
+pred = predict(slm, newdata=Data_test)
+plot(Data_test$Load, type='l')
+lines(pred, type='l', col='red')
+rmse(Data_test$Load[1:274], pred[1:274])
 
+formula <- "Load ~Load.1 + WeekDays + Load.7 + I(Load.7^2)+ Temp + I(Temp^2) + Temp_s99_max + I(Temp_s99_max^2) + Temp_s99_min + WeekDays + WD + BH+ toy + Summer_break + DLS + Christmas_break + HI "
+slm <- lm(formula%>%as.formula, data=Data_train)
+pred = predict(slm, newdata=Data_test)
+plot(Data_test$Load, type='l')
+lines(pred, type='l', col='red')
+rmse(Data_test$Load[1:274], pred[1:274])
 
+formule <- "Load ~ Month + Temp_s95_min + Temp_s95_max + HI + TauxPopMovement +Time + toy + Temp + Load.1 + Load.7 + WD + BH + Temp_s99_min + Temp_s99_max + Summer_break  + Christmas_break  + DLS"
 
+rf<- ranger::ranger(formule, data = Data_train, importance =  'permutation')
+rf.forecast <- predict(rf, data = Data_test)$predictions
 
+plot(Data_test$Load, type='l')
+lines(rf.forecast, type='l', col='red')
+rmse(Data_test$Load[1:274], rf.forecast[1:274])
 
+gam9<-qgam(equation%>%as.formula, data=Data_train, qu=0.4)
+gam9.forecast <- predict(gam9, newdata=Data_test)
 
