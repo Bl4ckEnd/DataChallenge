@@ -46,3 +46,11 @@ rmse((arima.predict + gam.predict)/2, test$Load) # [1] 2007
 # check residuals
 forecast::checkresiduals(arima.fit)
 
+# try new arima fit
+plot(test$Load, type = "l")
+arima.fit <- forecast::Arima(gam.predict, order = c(7,1,7), seasonal = c(7,1,7))
+arima.predict <- fitted(arima.fit)
+lines(arima.predict, col="blue")
+rmse(arima.predict, test$Load) # [1] 3472
+adf.test(gam.predict)
+acf(gam.predict)
