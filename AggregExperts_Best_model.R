@@ -237,7 +237,7 @@ plot(Data_test$GovernmentResponseIndex, lwd=2, type='l', axes=F, ylab='')
 legend("bottomleft", col=col, legend=colnames(experts), lty=1, bty='n')
 
 
-or <- oracle(Y=Data_test$Load, expertsP2000)
+or <- oracle(Y=Data_test$Load, experts)
 or
 
 plot(or$prediction, type='l', col='red')
