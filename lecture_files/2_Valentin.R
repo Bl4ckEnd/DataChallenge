@@ -97,4 +97,3 @@ col <- yarrr::piratepal("basel")
 boxplot(cbind(mod1.rmse_block, mod2.rmse_block), col=col[1:2], ylim=c(2000,7000))
 abline(h~rmse(y=Data0$Load[sel_b], ychap=mod1.forecast), col=col[1], lty="l")
 
-

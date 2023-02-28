@@ -58,7 +58,7 @@ names(Data)
 
 equation <- Load~  Time + toy + Temp + Load.1 + Load.7 + Temp_s99 + WeekDays + BH + Temp_s95_max + 
   Temp_s99_max + Summer_break  + Christmas_break + 
-  Temp_s95_min +Temp_s99_min + DLS + GovernmentResponseIndex
+  Temp_s95_min +Temp_s99_min + DLS + GovernmentResponseIndex + TauxPopMovement + Movement + HI + WD
 rf <- ranger(equation, data=Data0, importance =  'permutation')
 rf$r.squared
 rf$mtry
