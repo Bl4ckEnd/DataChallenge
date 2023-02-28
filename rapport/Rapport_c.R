@@ -37,11 +37,11 @@ Data0 <- Data_train[sel_a, ]
 Data1 <- Data_train[sel_b, ]
 Data_test = add_column(Data_test, Load=lead(Data_test$Load.1, default=mean(Data_test$Load.1)), .after = "Date")
 
-###Choix des variables 
+##### Choix des variables avec rf
 equation <- "Load~  Time + toy + Temp + Load.1 + Load.7 + Temp_s99 + WeekDays + BH + Temp_s95_max + 
   Temp_s99_max + Summer_break  + Christmas_break + 
   Temp_s95_min +Temp_s99_min + DLS + GovernmentResponseIndex + TauxPopMovement + Movement + HI + WD"
-rf <- ranger(equation, data=Data0, importance =  'permutation')
+rf <- ranger(equation, data=Data_train, importance =  'permutation')
 
 #############importance plot
 imp <- rf$variable.importance
@@ -53,83 +53,80 @@ K <- length(imp)
 text(tail(c(1:length(imp)), K), tail(imp[o]+max(imp/8), K), labels= tail(nom[o], K), pos=3, srt=90, adj=1, cex=0.6)
 points(c(1:length(imp)), imp[o], pch=20)
 
-####### ANOVA pour Movement 
+
+#### ANOVA
 formula1 <- "Load ~ Temp + WeekDays + WD + BH+ toy + Summer_break + DLS + Christmas_break"
 formula2 <- "Load ~ Temp + WeekDays + WD + BH+ toy + Summer_break + DLS + Christmas_break + Movement"
-small_lm <- lm(formula1%>%as.formula, data=Data0)
-large_lm <- lm(formula2%>%as.formula, data=Data0)
+small_lm <- lm(formula1%>%as.formula, data=Data_train)
+large_lm <- lm(formula2%>%as.formula, data=Data_train)
 anova.res <- anova(small_lm, large_lm)
 summary(anova.res)
 
 
 ######## lm
-formula <- "Load ~Load.1 + WeekDays + Load.7 + Temp  + Temp_s99_max + Temp_s99_min + WeekDays + WD + BH+ toy + Summer_break + DLS + Christmas_break + HI "
-slm <- lm(formula%>%as.formula, data=Data0)
-pred = predict(slm, newdata=Data1)
+formula <- "Load ~Load.1 + WeekDays + Load.7 + Temp + Temp_s99_max + Temp_s99_min + WeekDays + WD + BH+ toy + Summer_break + DLS + Christmas_break + HI "
+slm <- lm(formula%>%as.formula, data=Data_train)
+pred = predict(slm, newdata=Data_test)
 
-plot(Data1$Date, Data1$Load, type='l', main='lm')
-lines(Data1$Date,pred, type='l', col='red')
-rmse(Data1$Load, pred)
+plot(Data_test$Date, Data_test$Load, type='l', main='lm')
+lines(Data_test$Date,pred, type='l', col='red')
+rmse(Data_test$Load, pred)
 
 #######Polynomial lm
 formula <- "Load ~Load.1 + WeekDays + Load.7 + I(Load.7^2) + Temp + I(Temp^2) + Temp_s99_max + I(Temp_s99_max^2) + Temp_s99_min + WeekDays + WD + BH+ toy + Summer_break + DLS + Christmas_break + HI "
-slm <- lm(formula%>%as.formula, data=Data0)
-pred = predict(slm, newdata=Data1) #2153
+slm <- lm(formula%>%as.formula, data=Data_train)
+pred = predict(slm, newdata=Data_test) #2153
 
-plot(Data1$Date,Data1$Load, type='l',main='polynomial lm')
-lines(Data1$Date,pred, type='l', col='red')
-rmse(Data1$Load, pred) #2000
+plot(Data_test$Date,Data_test$Load, type='l', main='polynomial lm')
+lines(Data_test$Date,pred, type='l', col='red')
+rmse(Data_test$Load, pred) #2000
 
 
 #####Random forest
 formule <- "Load ~ Month + Temp_s95_min + Temp_s95_max + HI + TauxPopMovement +Time + toy + Temp + Load.1 + Load.7 + WD + BH + Temp_s99_min + Temp_s99_max + Summer_break  + Christmas_break  + DLS"
 
-rf<- ranger::ranger(formule, data = Data0, importance =  'permutation')
-rf.forecast <- predict(rf, data = Data1)$predictions
+rf<- ranger::ranger(formule, data = Data_train, importance =  'permutation')
+rf.forecast <- predict(rf, data = Data_test)$predictions
 
-plot(Data1$Date,Data1$Load, type='l', main='rf')
-lines(Data1$Date,rf.forecast, type='l', col='red')
-rmse(Data1$Load, rf.forecast)
+plot(Data_test$Date,Data_test$Load, type='l', main='rf')
+lines(Data_test$Date,rf.forecast, type='l', col='red')
+rmse(Data_test$Load, rf.forecast)
 
-####gam 
+####gam
 equation <- "Load ~ Load.1:as.factor(WeekDays) + HI + BH + Christmas_break + Summer_break + DLS + s(Temp) + s(Temp_s99_max, Temp_s99_min)+ s(Load.7) + s(Time, k=7) + s(toy, k =30, bs = 'cc', by=as.factor(WD))+ s(Temp, Time, k=20)"
 
-gam<-gam(equation%>%as.formula, data=Data0)
-gam.forecast <- predict(gam, newdata=Data1)
-
-plot(Data1$Date,Data1$Load, type='l', main='gam')
-lines(Data1$Date,gam.forecast, type='l', col='red')
-rmse(Data1$Load, gam.forecast)
-
-###check gam
+gam<-gam(equation%>%as.formula, data=Data_train)
+gam.forecast <- predict(gam, newdata=Data_test)
 gam.check(gam)
 
-####qgam 
-gam9<-qgam(equation%>%as.formula, data=Data0, qu=0.4)
-gam9.forecast <- predict(gam9, newdata=Data1)
+plot(Data_test$Date,Data_test$Load, type='l', main='gam')
+lines(Data_test$Date,gam.forecast, type='l', col='red')
+rmse(Data_test$Load, gam.forecast)
 
-plot(Data1$Date,Data1$Load, type='l', main='qgam')
-lines(Data1$Date,gam9.forecast, type='l', col='red')
-rmse(Data1$Load, gam9.forecast)
+####qgam 
+gam9<-qgam(equation%>%as.formula, data=Data_train, qu=0.4)
+gam9.forecast <- predict(gam9, newdata=Data_test)
+
+plot(Data_test$Date,Data_test$Load, type='l', main='qgam')
+lines(Data_test$Date,gam9.forecast, type='l', col='red')
+rmse(Data_test$Load, gam9.forecast)
 
 
 ### ARIMA Model
 arima.fit <- forecast::Arima(gam9.forecast, order = c(1,1,2), seasonal = c(0,0,2))
 arima.predict <- fitted(arima.fit)
 
-plot(Data1$Date, Data1$Load, type='l', main='arima')
-lines(Data1$Date, arima.predict, col="red")
-rmse(arima.predict, Data1$Load)
+plot(Data_test$Date, Data_test$Load, type='l', main='arima')
+lines(Data_test$Date, arima.predict, col="red")
+rmse(arima.predict, Data_test$Load)
 
 
 ######online learning
 # static 
 #On doit le faire ici sur tout le jeu train car sinon on n'a pas d'effectifs dans chaque sous modalité
 equation <- "Load ~ Load.1:as.factor(WeekDays) + HI + BH + Christmas_break + Summer_break + DLS + s(Temp) + s(Temp_s99_max, Temp_s99_min)+ s(Load.7) + s(Time, k=7) + s(toy, k =30, bs = 'cc', by=as.factor(WD))+ s(Temp, Time, k=20)"
-gam8<-qgam(equation%>%as.formula, data=Data_train, qu=0.4)
-gam8.forecast <- predict(gam8, newdata=Data_test)
 
-X <- predict(gam8, newdata=Data_train, type='terms')
+X <- predict(gam9, newdata=Data_train, type='terms')
 y = Data_train$Load
 ###scaling columns
 for (j in 1:ncol(X)){
@@ -138,7 +135,7 @@ for (j in 1:ncol(X)){
 X <- cbind(X,1)
 d <- ncol(X)
 
-X_test <- predict(gam8, newdata=Data_test, type='terms')
+X_test <- predict(gam9, newdata=Data_test, type='terms')
 for (j in 1:ncol(X_test)){
   X_test[,j] <- (X_test[,j]-mean(X_test[,j])) / sd(X_test[,j])
 }
@@ -146,6 +143,7 @@ X_test <- cbind(X_test,1)
 y_test <- Data_test$Load
 
 #dynamic
+
 ssm <- viking::statespace(X, y)
 gam9.kalman.static <- ssm$pred_mean%>%tail(nrow(Data_test))
 ssm_dyn <- viking::select_Kalman_variances(ssm, X, y, q_list = 2^(-30:0), p1 = 1, ncores = 6)
@@ -156,9 +154,9 @@ plot(Data_test$Date, Data_test$Load, type='l')
 lines(Data_test$Date, gam9.kalman.Dyn, type='l', col='red')
 rmse(Data_test$Load, gam9.kalman.Dyn)
 
-####Pipeline
+####### Pipeline
 Nblock<-10
-borne_block<-seq(1, nrow(Data0), length=Nblock+1)%>%floor
+borne_block<-seq(1, nrow(Data_train), length=Nblock+1)%>%floor
 block_list<-list()
 l<-length(borne_block)
 for(i in c(2:(l-1)))
@@ -170,30 +168,30 @@ block_list[[l-1]]<-c(borne_block[l-1]:(borne_block[l]))
 
 blockRMSE<-function(equation, block)
 {
-  g<- gam(as.formula(equation), data=Data0[-block,])
-  forecast<-predict(g, newdata=Data0[block,])
+  g<- gam(as.formula(equation), data=Data_train[-block,])
+  forecast<-predict(g, newdata=Data_train[block,])
   return(forecast)
 } 
 
 Block_forecast<-lapply(block_list, blockRMSE, equation=equation)%>%unlist
-Block_residuals <- Data0$Load-Block_forecast
+Block_residuals <- Data_train$Load-Block_forecast
 
 ####estimation of GAM, GAM effects
 g <- gam9
-g.forecast <- predict(g, newdata=Data1)
-terms0 <- predict(g, newdata=Data0, type='terms')
-terms1 <- predict(g, newdata=Data1, type='terms')
+g.forecast <- predict(g, newdata=Data_test)
+terms0 <- predict(g, newdata=Data_train, type='terms')
+terms1 <- predict(g, newdata=Data_test, type='terms')
 colnames(terms0) <- paste0("gterms_", c(1:ncol(terms0)))
 colnames(terms1) <- paste0("gterms_", c(1:ncol(terms1)))
 
-Data0_rf <- data.frame(Data0, terms0)
+Data0_rf <- data.frame(Data_train, terms0)
 residualsCV <- Block_residuals
 
 Data0_rf$residuals <- residualsCV
 Data0_rf$res.48 <- c(residualsCV[1], residualsCV[1:(length(residualsCV)-1)])
 Data0_rf$res.336 <- c(residualsCV[1:7], residualsCV[1:(length(residualsCV)-7)])
 
-Data1_rf <- data.frame(Data1, terms1)
+Data1_rf <- data.frame(Data_test, terms1)
 residuals <- Data1_rf$Load - gam9.forecast
 Data1_rf$residuals <- residuals
 Data1_rf$res.48 <- c(residuals[1], residuals[1:(length(residuals)-1)])
@@ -208,67 +206,74 @@ formule_rf <- paste0("residuals", "~", cov)
 rf_gam<- ranger::ranger(formule_rf, data = Data0_rf, importance =  'permutation')
 rf_gam.forecast <- predict(rf_gam, data = Data1_rf)$predictions+ g.forecast
 
-rmse(y=Data1$Load, ychap=rf_gam.forecast)
+rmse(y=Data_test$Load, ychap=rf_gam.forecast)
 rf_gam$variable.importance%>%sort
 
 
 Block_residuals.ts <- ts(Block_residuals, frequency=7)
 fit.arima.res <- auto.arima(Block_residuals.ts,max.p=3,max.q=4, max.P=2, max.Q=2, trace=T,ic="aic", method="CSS")
-#Best model: ARIMA(2,1,2)(2,0,0)[7]
 #saveRDS(fit.arima.res, "../Results/tif.arima.res.RDS")
-ts_res_forecast <- ts(c(Block_residuals.ts, Data1$Load-gam9.forecast),  frequency= 7)
+ts_res_forecast <- ts(c(Block_residuals.ts, Data_test$Load-gam9.forecast),  frequency= 7)
 refit <- Arima(ts_res_forecast, model=fit.arima.res)
-prevARIMA.res <- tail(refit$fitted, nrow(Data1))
+prevARIMA.res <- tail(refit$fitted, nrow(Data_test))
 gam9.arima.forecast <- gam9.forecast + prevARIMA.res
 
 
-#####Aggregation d'experts 
-experts <- cbind(gam9.forecast, pred,rf.forecast, gam.forecast, arima.predict, as.numeric(gam9.arima.forecast))%>%as.matrix
-nom_exp <- c("qgam", "polynomial_lm", "rf", "gam", "arima", "pipeline")
+#Mini aggregation d'experts 
+experts <- cbind(gam9.forecast, pred,rf.forecast, gam.forecast, arima.predict, gam9.kalman.Dyn, as.numeric(gam9.arima.forecast))%>%as.matrix
+nom_exp <- c("qgam", "polynomial_lm", "rf", "gam", "arima","Kalman_dyn", "pipeline")
 colnames(experts) <-  nom_exp
 
-rmse_exp <- apply(experts, 2, rmse, y=Data1$Load)
+rmse_exp <- apply(experts, 2, rmse, y=Data_test$Load)
 sort(rmse_exp)
-cumsum_exp <- apply(Data1$Load-experts, 2, cumsum)
+cumsum_exp <- apply(Data_test$Load-experts, 2, cumsum)
 
-#Correction du biais
+par(mfrow=c(1,1))
+K <-ncol(experts)
+col <- rev(RColorBrewer::brewer.pal(n = max(min(K,11),4),name = "Spectral"))[1:min(K,11)]
+matplot(cumsum_exp, type='l', col=col, lty=1, lwd=2)
+par(new=T)
+plot(Data1$GovernmentResponseIndex, lwd=2, type='l', axes=F, ylab='GRI')
+legend("topleft", col=col, legend=colnames(experts), lty=1, bty='n')
+par(new=T)
+
+##Correction bias
 expertsM2000 <- experts-2000
 expertsP2000 <- experts+2000
 experts <- cbind(experts, expertsM2000, expertsP2000)
 colnames(experts) <-c(nom_exp, paste0(nom_exp,  "M"), paste0(nom_exp,  "P"))
-cumsum_exp <- apply(Data1$Load-experts, 2, cumsum)
+cumsum_exp <- apply(Data_test$Load-experts, 2, cumsum)
 
-par(mfrow=c(1,1))
-agg <- mixture(Y = Data1$Load, experts = experts, model="BOA", loss.gradient=TRUE)
+
+agg<- mixture(Y = Data_test$Load, experts = experts, loss.gradient=TRUE)
 summary(agg)
-####PLOT EXPERT AGGREGATION
+# see why it does not work 
 plot(agg)
-or <- oracle(Y=Data1$Load, experts);or
 
+or <- oracle(Y=Data_test$Load, experts);
 par(mfrow=c(1,1))
-plot(Data1$Date, Data1$Load, type='l')
-lines(Data1$Date, or$prediction, type='l', col='yellow')
-lines(Data1$Date, agg$prediction, type='l', col='red')
-rmse(agg$prediction, y=Data1$Load)
-#with Data1 it's really improved: 1900 -> 1446
+plot(Data_test$Date, Data_test$Load, type='l')
+lines(Data_test$Date, or$prediction, type='l', col='red')
+lines(Data_test$Date, agg$prediction, type='l', col='orange')
+rmse(agg$prediction[1:274], y=Data_test$Load[1:274]) #949
 
-
-####FIGURE PLOT 
-models = c(Data1$Load, pred, rf.forecast, gam9.forecast, gam.forecast, gam9.arima.forecast, agg$prediction)
+##### SUBMISSION qgamL19 : agg: even though is 720 --> overall score is much better 
+models = c(Data1$Load, pred, rf.forecast, gam.forecast, gam9.forecast, gam9.arima.forecast, agg$prediction)
 K <-ncol(models)
-col <- rev(RColorBrewer::brewer.pal(n = max(min(K,8),6),name = "Spectral"))[1:min(K,8)]
-nom_mod <- c("Real_load", "polynomial_lm", "Random_forest", "gam","qgam", "pipeline", "agg_exp")
+col <- rev(RColorBrewer::brewer.pal(n = max(min(K,6),4),name = "Spectral"))[1:min(K,6)]
+nom_mod <- c("Real_load", "polynomial_lm", "Random_forest", "gam", "qgam","pipeline", "agg_exp")
 
-plot(Data1$Date,Data1$Load, type='l', ylab='Real_load', col="darkblue", main="Prédictions",lwd=3 )
-lines(Data1$Date,pred, type='l', ylab = "polynomial_lm", col='forestgreen')
+plot(Data_test$Date,Data_test$Load, type='l', ylab='Real_load', col="darkblue", main="Prédictions", lwd=4)
+#Polynomial lm
+lines(Data_test$Date,pred, type='l', ylab = "polynomial_lm", col='lightgreen')
 #Random forest
-lines(Data1$Date,rf.forecast, type='l',  ylab='rf',col= "lightgreen")
+lines(Data_test$Date,rf.forecast, type='l',  ylab='rf',col= "darkgreen")
 #gam
-lines(Data1$Date,gam.forecast, type='l', ylab='gam',col="yellow")
+lines(Data_test$Date,gam.forecast, type='l', ylab='qgam',col="yellow")
 #qgam
-lines(Data1$Date,gam9.forecast, type='l', ylab='qgam',col="orange")
-#Pipeline
-lines(Data1$Date,gam9.arima.forecast, type='l', ylab='qgam',col="darkorange")
+lines(Data_test$Date,gam9.forecast, type='l', ylab='qgam',col="orange")
+#pipeline
+lines(Data_test$Date,gam9.arima.forecast, type='l', ylab='qgam',col="darkorange")
 #Aggregation d'experts
-lines(Data1$Date, agg$prediction, type='l', ylab='agg_exp', col='red')
-legend("bottomleft", col=col, legend=nom_mod, lty=1, bty='n')
+lines(Data_test$Date, agg$prediction, type='l', ylab='agg_exp', col='red')
+legend("topleft", col=col, legend=nom_mod, lty=1, bty='n')

@@ -11,12 +11,12 @@ output:
 ---
 \newpage
 # Introduction
-Nous avons un jeu de données regroupant différents variables en rapport avec la consommation énérgétique française pendant la période de 2012 à 2021. Le but ici est de construire un modèle qui permettant de prédire la consommation française en énergie pendant la période du Covid. 
+Nous avons un jeu de données regroupant différentes variables en rapport avec la consommation énergétique française pendant la période de 2012 à 2021. Notre but est de construire un modèle qui permet de prédire la consommation française en énergie pendant la période du Covid. 
 
-Le premier reflèxe est ici de télécharger l'ensemble des packages et divisé le set train en deux pour pouvoir tester nos modèles avant de les soumettre. Nous avons ainsi choisi la période de 2012 - 2019 comme train et 2019-(15/04/2020) comme test.
+Le premier réflexe est de télécharger l'ensemble des packages et diviser le set train en deux pour pouvoir tester nos modèles avant de les soumettre. Nous avons ainsi choisi la période de 2012 - 2019 comme train et 2019-(15/04/2020) comme test.
+
 ```{r preparation, include=FALSE}
 rm(list=objects())
-
 library(mgcv)
 library(yarrr)
 library(qgam)
@@ -26,17 +26,41 @@ library(tidyverse)
 library(ranger)
 library(opera)
 
+rmse = function(y, ychap, digits=0){
+  return(round(sqrt(mean((y-ychap)^2, na.rm=TRUE)), digits=digits))
+}
+
+
+###Load Datasets
 load("../Data/Data0.Rda")
 load("../Data/Data1.Rda")
 
-sel_a <- which(Data0$Year<=2019)
-sel_b <- which(Data0$Year>2019)
+Data_train = Data0
+Data_test = Data1
+Data_train$Time <- as.numeric(Data_train$Date)
+Data_test$Time <- as.numeric(Data_test$Date)
+names(Data_train)
+names(Data_test)
+dim(Data_train)
+dim(Data_test)
+
+#Faire des train et test à partir de Data0
+sel_a <- which(Data_train$Year<=2019)
+sel_b <- which(Data_train$Year>2019)
+
+Data0 <- Data_train[sel_a, ]
+Data1 <- Data_train[sel_b, ]
+#Data_test = add_column(Data_test, Load=lead(Data_test$Load.1, default=mean(Data_test$Load.1)), .after = "Date")
 ```
 
 
 # Choix du type de modèle 
-Pour comprendre quelles variables sont plus significatives, et argumenter le choix des variables, nous allons effectuer une random forest, et regarder l'importance des variables.
-````{Choix des variables avec random forest}
+
+Pour commencer, nous avons créé tout d'abord, la variable **WeekDays2**. Il s'agit d'une version modifiée de la variable WeekDays qui distingue les jours laboraux, samedis et dimanches. Nous avons d'autre part récupéré des données des différents mouvements sociaux et le pourcentage de population mobilisée. Pendant les jours avec des manifestations, **Movement** est 1 et 0 sinon. Les données viennent de SNCF. Ensuite nous avons créé une variable mesurant la température ressentie. Le problème de cette dernière variable concernait les nombreuses valeurs NA's, ainsi que la représentativité au niveau national des stations météorologiques constituant les données.
+
+
+Pour comprendre quelles variables sont plus significatives, et argumenter le choix, nous allons effectuer une random forest, et regarder l'importance des variables.
+````{r Choix des variables avec random forest}
 equation <- "Load~  Time + toy + Temp + Load.1 + Load.7 + Temp_s99 + WeekDays + BH + Temp_s95_max + 
   Temp_s99_max + Summer_break  + Christmas_break + 
   Temp_s95_min +Temp_s99_min + DLS + GovernmentResponseIndex + TauxPopMovement + Movement + HI + WD"
@@ -54,8 +78,7 @@ points(c(1:length(imp)), imp[o], pch=20)
 ````
 
 Nous pouvons ainsi bien remarquer que les variables à plus forte importance sont: 
-Load.1, Load.7, les variables relatives à la temperature, WeekDays, WD, BH, toy, Summer_break, DLS and Christmas_break. Nous avons vérifié ce résultat à l'aide de ANOVA.
-
+Load.1, Load.7, les variables relatives à la température, WeekDays, WD, BH, toy, Summer_break, DLS and Christmas_break. Nous avons également vérifié que la variable **Movement** (=taux de la population qui a manifesté) n’était pas explicative à l’aide de ANOVA.
 ```{r}
 formula1 <- "Load ~ Temp + WeekDays + WD + BH+ toy + Summer_break + DLS + Christmas_break"
 formula2 <- "Load ~ Temp + WeekDays + WD + BH+ toy + Summer_break + DLS + Christmas_break + Movement"
@@ -65,61 +88,260 @@ anova.res <- anova(small_lm, large_lm)
 summary(anova.res)
 ```
 
-Nous avons crée tout d'abord, la variable WeekDays2. Il s'agit d'une version modifiée de la variable WeekDays qui distingue les jours laborales, samedis et dimanches. Nous avons d'autre part recupéré les différents mouvements sociaux et le pourcentage de population mobilisée !!ajouter plus de précisions?!!. Ensuite nous avons créée une variable mesurant la température ressentie. Le problème de cette dernière variable concernait les nombreuses valeurs NA's, ainsi que la représentativité au niveau national des stations météorologiques constituant les données.
-
 ## Linear Models
 ### Simple linear model 
-Pour comprendre et apprehender le cadre d'étude on commencera par effectuer un modèle simple. C'est-à-dire un modèle linéaire avec les covariables choisies précédamment. Nous avons considéré que la consommation de la veille changeait en fonction du jour de la semaine. C'est pour cela que nous avons décidé de créer une fonction de la consommation de la veille en fonction de chaque catégorie de WeekDays.
+Pour comprendre et appréhender le cadre d'étude nous commencerons par effectuer un modèle simple. C'est-à-dire un modèle linéaire avec les co-variables choisies précédemment. Nous avons considéré que la consommation de la veille changeait en fonction du jour de la semaine. C'est pour cela que nous avons décidé de créer une fonction de la consommation de la veille en fonction de chaque catégorie de **WeekDays**.
 ```{r Linear Models, echo=TRUE}
-mod1 = lm(Load~WeekDays2+Temp, data=Data0[sel_a,])
-summary(mod1)
+formula <- "Load ~Load.1 + WeekDays + Load.7 + Temp  + Temp_s99_max + Temp_s99_min + WeekDays + WD + BH+ toy + Summer_break + DLS + Christmas_break + HI "
+slm <- lm(formula%>%as.formula, data=Data0)
+pred = predict(slm, newdata=Data1)
+
+plot(Data1$Date, Data1$Load, type='l', main='lm')
+lines(Data1$Date,pred, type='l', col='red')
+rmse(Data1$Load, pred)
 ```
 
 ### Polynomial transformations
-Nous avons mis en place des transformations polynomiales sur le modèle linéaire comme une première approche de compléxification du modèle.  
+Nous avons mis en place des transformations polynomiales sur le modèle linéaire comme une première approche de complexification du modèle.  Pour cela, nous avons ajouté les co-variables relatives à la température  et Load.7 au carré.
+
 ```{r Linear Models avec transformations polynomiales, echo=TRUE}
-#mettre
+formula <- "Load ~Load.1 + WeekDays + Load.7 + I(Load.7^2) + Temp + I(Temp^2) + Temp_s99_max + I(Temp_s99_max^2) + Temp_s99_min + WeekDays + WD + BH+ toy + Summer_break + DLS + Christmas_break + HI "
+
+slm <- lm(formula%>%as.formula, data=Data0)
+pred = predict(slm, newdata=Data1)
+plot(Data1$Date,Data1$Load, type='l',main='polynomial lm')
+lines(Data1$Date,pred, type='l', col='red')
+rmse(Data1$Load, pred)
 ```
 
 ## Random Forest
+```{r Random forest, include=TRUE}
+formule <- "Load ~ Month + Temp_s95_min + Temp_s95_max + HI + TauxPopMovement +Time + toy + Temp + Load.1 + Load.7 + WD + BH + Temp_s99_min + Temp_s99_max + Summer_break  + Christmas_break  + DLS"
 
-## Generalized Additif models 
+rf<- ranger::ranger(formule, data = Data0, importance =  'permutation')
+rf.forecast <- predict(rf, data = Data1)$predictions
+
+plot(Data1$Date,Data1$Load, type='l', main='rf')
+lines(Data1$Date,rf.forecast, type='l', col='red')
+rmse(Data1$Load, rf.forecast)
+```
+
+## Modèles additifs généralisés
 ### Choix de la partie linéaire et spline 
 
-Dans la suite, nous avons ainsi considéré de mettre en place des Modèles Additifs généralisés. Pour cela, nous avons d'abord distingué les variables à mettre dans la partie linéaire du modèle, puis dans la partie spline. Nous avons intégré ainsi les variables qualitatives ainsi que la consommation de la veille en fonction du jours de la semaine dans la partie linéaire. On a ajouté ainsi dans la partie spline les variables ayant une notion de temporalité comme la consommation de la semaine ou les températures. Nous avons également regroupé dans un même spline des variables ayant une relation logique, comme c'est le cas de la température et le Temps ou les Temperatures_s99 min et max. Nous avons également crée une fonction spline pour chaque jour de la semaine pour la variable toy pour ne pas négliger l'effet des jours de la semaine sur la consommation annuelle. 
-```{r GA Models, include=TRUE}
-#mettre
-```
-Pour améliorer le rendement du modèle, nous avons tenté de comprendre l'origine des erreurs à partir des courbes de consommation. Nous avons constaté que les erreurs commencent à s'accentuer au niveau du mois de mars 2020, juste au niveau du début de la période Covid. Ceci s'explique du fait que la variable GovernementResponseIndex comprends des valeurs nulles pendant des années, et celles-ci explosent dans une courte période d'un mois, laissant peu de temps d'entrainement sur la pandémie. Pour simuler le comportement de la population pendant le confinement avec les données que l'on avait déjà, nous avons pensé aux samedis. En effet, nous avons mis l'hypothèse qu'un jour de confinement était comparable en termes de consommation à un jour de weekend comme un samedi. Dans cet esprit, nous avons créé la variable WD, qui modifie le jour de la semaine à samedi s'il y a confinement (la GovernementResponseIndex>=70), et maintien des jours de la semaine sinon.
+Dans la suite, nous avons considéré de mettre en place des Modèles Additifs généralisés. Pour cela, nous avons d'abord distingué les variables à mettre dans la partie linéaire du modèle, puis dans la partie spline. Nous avons intégré les variables qualitatives ainsi que la consommation de la veille en fonction du jour de la semaine dans la partie linéaire. On a ajouté dans la partie spline les variables ayant une notion de temporalité comme la consommation de la semaine ou les températures. Nous avons également regroupé dans une même spline des variables ayant une relation logique, comme c'était le cas avec la température et le temps. Nous avons également créé une fonction spline pour chaque jour de la semaine pour la variable toy pour ne pas négliger l'effet des jours de la semaine sur la consommation annuelle. 
 
-Nous avons également utilisé la fonction gam.check pour améliorer le rendement du modèle gam. Celle-ci nous a permis d'ajuster la dimension des bases spline. Nous avons ainsi incrémenté les valeurs de k quand la p-value était très petite. Pour la variable toy, on a !!!!!!
-Nous avons également vérifié que les résidus étaient bien gaussiens à chaque fois à partir de l'histogramme issu du plot. 
-```{r gam.check, include=TRUE}
-#mettre code
-```
-### GAM et régréssion quantile: qgam
+```{r GAM, include=TRUE}
+equation <- "Load ~ Load.1:as.factor(WeekDays) + HI + BH + Christmas_break + Summer_break + DLS + s(Temp) + s(Temp_s99_max, Temp_s99_min)+ s(Load.7) + s(Time, k=7) + s(toy, k =30, bs = 'cc', by=as.factor(WD))+ s(Temp, Time, k=20)"
 
-Dans la suite on utilisera le package qgam, et en particulier la fonction qgam. Celle-ci ajuste un modèle additif ainsi qu'une régréssion quantile sur un unique quantile. On utilise ici la même equation qu'auparavant, il suffit juste d'ajuster la variable "qu", correspondant au quantile. Après plusieurs essais, nous avons remarqué qu'on obtenait des meilleurs résultats avec "qu" autuours de 0.4. En effet, en fixant le quantile à 0.4, on change la fonction de perte. On introduit ainsi un biais, qui permet de s'ajuster mieux aux données lors de la période du covid.  
-```{r GAM + quantile regression, include=TRUE}
-#mettre
+gam<-gam(equation%>%as.formula, data=Data0)
+gam.forecast <- predict(gam, newdata=Data1)
+
+plot(Data1$Date,Data1$Load, type='l', main='gam')
+lines(Data1$Date,gam.forecast, type='l', col='red')
+rmse(Data1$Load, gam.forecast)
+```
+Pour améliorer le rendement du modèle, nous avons tenté de comprendre l'origine des erreurs à partir des courbes de consommation. Nous avons constaté que les erreurs commencent à s'accentuer au niveau du mois de mars 2020, juste au niveau du début de la période covid. Ceci s'explique du fait que la variable **GovernementResponseIndex** comprend des valeurs nulles pendant des années, et celles-ci explosent dans une courte période d'un mois, laissant peu de temps d'entraînement sur la pandémie. Pour simuler le comportement de la population pendant le confinement avec les données que l'on avait déjà, nous avons pensé aux samedis. En effet, nous avons émis l'hypothèse qu'un jour de confinement était comparable en termes de consommation à un jour de weekend comme un samedi. Dans cet esprit, nous avons créé la variable WD, qui modifie le jour de la semaine à samedi s'il y a confinement (la GovernementResponseIndex>=70), et maintien le jours de la semaine inchangé sinon. !! -> mettre online-learning
+
+Nous avons également utilisé la fonction gam.check pour améliorer le rendement du modèle gam. Celle-ci nous a permis d'ajuster la dimension des bases des splines. Nous avons ainsi incrémenter les valeurs de k quand la p-value était très petite. Pour la variable toy, utiliser un k très grand faisait tourner le modèle trop long, nous avons donc pris k=30 même si la p-value était encore petite. Enfin, nous avons également vérifié que les résidus étaient bien gaussiens à chaque fois à partir de l'histogramme issu du plot. !!! COMENTER ?!!
+```{r gam.check, include=FALSE}
+gam.check(gam)
+```
+
+
+### GAM et régression quantile: qgam
+
+Dans la suite on utilisera le package qgam, et en particulier la fonction qgam. Celle-ci ajuste un modèle additif ainsi qu'une régression quantile sur un unique quantile. On utilise ici la même équation qu'auparavant, il suffit juste d'ajuster la variable "qu", correspondant au quantile. Après plusieurs essais, nous avons remarqué qu'on obtient de meilleurs résultats avec ‘qu' autour de 0.4. En effet, en fixant le quantile à 0.4, on change la fonction de perte. On introduit ainsi un biais, qui permet de s'ajuster mieux aux données lors de la période du covid.  
+```{r qgam , include=TRUE}
+gam9<-qgam(equation%>%as.formula, data=Data0, qu=0.4)
+gam9.forecast <- predict(gam9, newdata=Data1)
+
+plot(Data1$Date,Data1$Load, type='l', main='qgam')
+lines(Data1$Date,gam9.forecast, type='l', col='red')
+rmse(Data1$Load, gam9.forecast)
 ```
 
 ## ARIMA et Kalman Filter
 
+### ARIMA
+ARIMA (Autoregressive Integrated Moving Average) est un modèle de série chronologique qui utilise les valeurs et les erreurs passées pour prévoir les valeurs futures d'une série. Le modèle peut être ajusté pour capturer les tendances et la saisonnalité, et implique de différencier les données pour les rendre stationnaires. L'ARIMA est largement utilisé pour faire des prévisions sur la base de tendances historiques.
+
+```{r arima , include=TRUE} 
+arima.fit <- forecast::Arima(gam9.forecast, order = c(1,1,2), seasonal = c(0,0,2))
+arima.predict <- fitted(arima.fit)
+
+plot(Data1$Date, Data1$Load, type='l', main='arima')
+lines(Data1$Date, arima.predict, col="red")
+rmse(arima.predict, Data1$Load)
+```
+### Filtre Kalman 
+Une fois le modèle qgam amélioré le modèle qgam, nous avons décidé d’implémenter le online-learning. Cette méthode nous permet d’aborder le problème de données d’entraînement insuffisantes pour la période covid. En effet, le filtre Kalman dynamique met à jour l’estimation des poids séquentiellement, au fur et mesure des prédictions …ajouter ici ce que dynamique fait en particulier….. Pour simplifier la situation covid, nous avons créé la variable GRI_factor, étant une variable catégorielle à trois facteurs (none: 0-50, medium: 50-62, high:62-70). Ceci nous permet faire une mise au point de la situation covid avec du online-learning. Malheureusement, les résultats étaient meilleurs sans cette variable. C’est pour cela que nous avons décidé de continuer avec le modèle qgam précédent pour le online learning. 
+
+```{r Kalman Filter , include=TRUE}
+# static 
+#On doit le faire ici sur tout le jeu train car sinon on n'a pas d'effectifs dans chaque sous modalité
+equation <- "Load ~ Load.1:as.factor(WeekDays) + HI + BH + Christmas_break + Summer_break + DLS + s(Temp) + s(Temp_s99_max, Temp_s99_min)+ s(Load.7) + s(Time, k=7) + s(toy, k =30, bs = 'cc', by=as.factor(WD))+ s(Temp, Time, k=20)"
+gam8<-qgam(equation%>%as.formula, data=Data_train, qu=0.4)
+gam8.forecast <- predict(gam8, newdata=Data_test)
+
+X <- predict(gam8, newdata=Data_train, type='terms')
+y = Data_train$Load
+###scaling columns
+for (j in 1:ncol(X)){
+  X[,j] <- (X[,j]-mean(X[,j])) / sd(X[,j])
+}
+X <- cbind(X,1)
+d <- ncol(X)
+
+X_test <- predict(gam8, newdata=Data_test, type='terms')
+for (j in 1:ncol(X_test)){
+  X_test[,j] <- (X_test[,j]-mean(X_test[,j])) / sd(X_test[,j])
+}
+X_test <- cbind(X_test,1)
+y_test <- Data_test$Load
+
+#dynamic
+ssm <- viking::statespace(X, y)
+gam9.kalman.static <- ssm$pred_mean%>%tail(nrow(Data_test))
+ssm_dyn <- viking::select_Kalman_variances(ssm, X, y, q_list = 2^(-30:0), p1 = 1, ncores = 6)
+
+ssm_dyn <- predict(ssm_dyn, X_test, y_test, type='model', compute_smooth = TRUE)
+gam9.kalman.Dyn <- ssm_dyn$pred_mean%>%tail(nrow(Data_test))
+plot(Data_test$Date, Data_test$Load, type='l')
+lines(Data_test$Date, gam9.kalman.Dyn, type='l', col='red')
+rmse(Data_test$Load, gam9.kalman.Dyn)
+``` 
 
 ## Pipeline basée sur le modèle qgam
-Étant arrivés au bout des amélioration de qgam, nous avons considérer d'autres modèles vus en cours pour comparer les performances. 
-On a ainsi décidé de garder notre équation sur la qgam et de l'implémenter ensuite sur d'autres modèles. On a ainsi d'étudier les résidus. Ceci va ainsi nous permettre de ???? \\
+Étant arrivés au bout des améliorations de qgam, et tout en ayant tenté arima et le filtre kalman, nous avons considéré d'autres modèles vus en cours pour comparer les performances. 
+On a ainsi décidé de garder notre équation sur la qgam et de l'implémenter ensuite sur d'autres modèles. On a ainsi étudié les résidus. Ceci va ainsi nous permettre de ???? \\
 Nous avons ainsi décidé de tester les forêts aléatoires sur les résidus de qgam. Après avoir appliqué l'effet des forêts aléatoires sur le modèle, nous avons amélioré davantage la performance à l'aide de Arima. 
-```{r QGAM + Blocks résiduals + RF + Arima , include=TRUE}
-#mettre
+
+```{r QGAM + Blocks résiduals + RF + Arima et validation croisée, include=TRUE}
+Nblock<-10
+borne_block<-seq(1, nrow(Data0), length=Nblock+1)%>%floor
+block_list<-list()
+l<-length(borne_block)
+for(i in c(2:(l-1)))
+{
+  block_list[[i-1]] <- c(borne_block[i-1]:(borne_block[i]-1))
+}
+block_list[[l-1]]<-c(borne_block[l-1]:(borne_block[l]))
+
+
+blockRMSE<-function(equation, block)
+{
+  g<- gam(as.formula(equation), data=Data0[-block,])
+  forecast<-predict(g, newdata=Data0[block,])
+  return(forecast)
+} 
+
+Block_forecast<-lapply(block_list, blockRMSE, equation=equation)%>%unlist
+Block_residuals <- Data0$Load-Block_forecast
+
+####estimation of GAM, GAM effects
+g <- gam9
+g.forecast <- predict(g, newdata=Data1)
+terms0 <- predict(g, newdata=Data0, type='terms')
+terms1 <- predict(g, newdata=Data1, type='terms')
+colnames(terms0) <- paste0("gterms_", c(1:ncol(terms0)))
+colnames(terms1) <- paste0("gterms_", c(1:ncol(terms1)))
+
+Data0_rf <- data.frame(Data0, terms0)
+residualsCV <- Block_residuals
+
+Data0_rf$residuals <- residualsCV
+Data0_rf$res.48 <- c(residualsCV[1], residualsCV[1:(length(residualsCV)-1)])
+Data0_rf$res.336 <- c(residualsCV[1:7], residualsCV[1:(length(residualsCV)-7)])
+
+Data1_rf <- data.frame(Data1, terms1)
+residuals <- Data1_rf$Load - gam9.forecast
+Data1_rf$residuals <- residuals
+Data1_rf$res.48 <- c(residuals[1], residuals[1:(length(residuals)-1)])
+Data1_rf$res.336 <- c(residuals[1:7], residuals[1:(length(residuals)-7)])
+
+cov <- "Time + toy + Temp + Load.1 + Load.7 + Temp_s99 + WeekDays + BH + Temp_s95_max + Temp_s99_max + Summer_break  + Christmas_break + 
+Temp_s95_min +Temp_s99_min + DLS + GovernmentResponseIndex + res.48 + res.336 +"
+gterm <-paste0("gterms_", c(1:ncol(terms0)))
+gterm <- paste0(gterm, collapse='+')
+cov <- paste0(cov, gterm, collapse = '+')
+formule_rf <- paste0("residuals", "~", cov)
+rf_gam<- ranger::ranger(formule_rf, data = Data0_rf, importance =  'permutation')
+rf_gam.forecast <- predict(rf_gam, data = Data1_rf)$predictions+ g.forecast
+
+rmse(y=Data1$Load, ychap=rf_gam.forecast)
+rf_gam$variable.importance%>%sort
+
+
+Block_residuals.ts <- ts(Block_residuals, frequency=7)
+fit.arima.res <- auto.arima(Block_residuals.ts,max.p=3,max.q=4, max.P=2, max.Q=2, trace=T,ic="aic", method="CSS")
+#Best model: ARIMA(2,1,2)(2,0,0)[7]
+#saveRDS(fit.arima.res, "../Results/tif.arima.res.RDS")
+ts_res_forecast <- ts(c(Block_residuals.ts, Data1$Load-gam9.forecast),  frequency= 7)
+refit <- Arima(ts_res_forecast, model=fit.arima.res)
+prevARIMA.res <- tail(refit$fitted, nrow(Data1))
+gam9.arima.forecast <- gam9.forecast + prevARIMA.res
 ```
 
 ## Aggrégation d'experts 
 
-Comme dernière méthode, nous avons décidé de mettre en place un aggrégation d'experts pour extraire une combinaison de prédicteurs qui puissent améliorer davantage la performance du modèle. Pour cela, nous avons regroupé les différents prédicteurs dans une variable experts. Dans cette aggrégation d'experts, nous avons utilisé les différents modèles qgam (avec et sans arima), une forêt aléatoire comprenant toutes les variables, ainsi qu'un filtre kalman. Nous avions déjà essayer un tel élément, mais les résultats n'étaient pas assez satisfaisants.  
-Le modèle obtenu par combinaison des différents prédicteurs obtient une performance bien meilleure que celle obtenue auparavant. 
+Comme dernière méthode, nous avons décidé de mettre en place un agrégation d'experts pour extraire une combinaison de prédicteurs qui puissent améliorer davantage la performance du modèle. Pour cela, nous avons regroupé les différents prédicteurs dans une variable experts. Dans cette agrégation d'experts, nous avons utilisé les différents modèles gam,  qgam (avec et sans arima), une forêt aléatoire comprenant toutes les variables, un filtre kalman, la pipeline... 
+Le modèle obtenu par combinaison des différents prédicteurs obtient une performance bien meilleure que celle obtenue auparavant. Comme on peut le voir dans la figure, le modèle BOA permet d’ajuster les coefficients des modèles de façon variable sur chaque partie.  
 
+```{r QGAM + Blocks résiduals + RF + Arima , include=TRUE}
+experts <- cbind(gam9.forecast, pred,rf.forecast, gam.forecast, arima.predict, as.numeric(gam9.arima.forecast))%>%as.matrix
+nom_exp <- c("qgam", "polynomial_lm", "rf", "gam", "arima", "pipeline")
+colnames(experts) <-  nom_exp
+
+rmse_exp <- apply(experts, 2, rmse, y=Data1$Load)
+sort(rmse_exp)
+cumsum_exp <- apply(Data1$Load-experts, 2, cumsum)
+
+#Correction du biais
+expertsM2000 <- experts-2000
+expertsP2000 <- experts+2000
+experts <- cbind(experts, expertsM2000, expertsP2000)
+colnames(experts) <-c(nom_exp, paste0(nom_exp,  "M"), paste0(nom_exp,  "P"))
+cumsum_exp <- apply(Data1$Load-experts, 2, cumsum)
+
+par(mfrow=c(1,1))
+agg <- mixture(Y = Data1$Load, experts = experts, model="BOA", loss.gradient=TRUE)
+summary(agg)
+####PLOT EXPERT AGGREGATION
+plot(agg)
+or <- oracle(Y=Data1$Load, experts);or
+
+par(mfrow=c(1,1))
+plot(Data1$Date, Data1$Load, type='l')
+lines(Data1$Date, or$prediction, type='l', col='yellow')
+lines(Data1$Date, agg$prediction, type='l', col='red')
+rmse(agg$prediction, y=Data1$Load)
+```
+La figure finale avec presque tous nos modèles sur les données train (sel_a): 
+```{r Figure modèles , include=TRUE}
+models = c(Data1$Load, pred, rf.forecast, gam9.forecast, gam.forecast, gam9.arima.forecast, agg$prediction)
+K <-ncol(models)
+col <- rev(RColorBrewer::brewer.pal(n = max(min(K,8),6),name = "Spectral"))[1:min(K,8)]
+nom_mod <- c("Real_load", "polynomial_lm", "Random_forest", "gam","qgam", "pipeline", "agg_exp")
+
+plot(Data1$Date,Data1$Load, type='l', ylab='Real_load', col="darkblue", main="Prédictions",lwd=3 )
+lines(Data1$Date,pred, type='l', ylab = "polynomial_lm", col='forestgreen')
+#Random forest
+lines(Data1$Date,rf.forecast, type='l',  ylab='rf',col= "lightgreen")
+#gam
+lines(Data1$Date,gam.forecast, type='l', ylab='gam',col="yellow")
+#qgam
+lines(Data1$Date,gam9.forecast, type='l', ylab='qgam',col="orange")
+#Pipeline
+lines(Data1$Date,gam9.arima.forecast, type='l', ylab='qgam',col="darkorange")
+#Aggregation d'experts
+lines(Data1$Date, agg$prediction, type='l', ylab='agg_exp', col='red')
+legend("bottomleft", col=col, legend=nom_mod, lty=1, bty='n')
+```
+Nous pouvons voir sur la figure, que le modèle plus performant est effectivement issu de la combinaison des autres modèles. !!!! COMMENTER !!!
 
 %%% A Rajouter les critères utilisés pour des bons modèles. 
 
+# Conclusion
+
+Dans ce travail, nous avons testé plusieurs modèles différents pour prédire la charge électrique de la France. Si nos modèles les plus simples donnaient déjà des résultats exploitables, les plus complexes étaient encore plus prometteurs. Le plus grand défi a été le fait que la période de test a été fixée pendant la pandémie de covid, rendant la prévision plus difficile. Notre meilleur modèle est un modèle additif généralisé avec régression quantile. L'utilisation de techniques telles que l'agrégation d'experts et l'apprentissage en ligne a encore amélioré notre précision. Un autre défis, était le fait qu’au niveau des jeux de données train issus de sel_a, on n’avait pas encore du covid. Ceci créait un biais entre les scores prévus et ceux sur Kaggle.  En effet, en entraînant le jeu de données train tout entier, on avait un mois de covid, ce qui améliorait nettement nos résultats. 
