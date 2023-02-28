@@ -15,25 +15,14 @@ library(ranger)
 library(opera)
 
 ###Load Datasets
-load("Data/Data0.Rda")
-load("Data/Data1.Rda")
+load("../Data/Data0.Rda")
+load("../Data/Data1.Rda")
 
 ### Change weekdays --> saturdays if govresponseindex>0.70
-#Data0
-WD = Data0$WeekDays
-index = which(Data0$GovernmentResponseIndex>=70)
-WD[index]="Saturday"
-Data0 = cbind(Data0,WD)
-
-#Data1
-WD = Data1$WeekDays
-index = which(Data1$GovernmentResponseIndex>=70)
-WD[index]="Saturday"
-Data1 = cbind(Data1, WD)
 
 ###Mise en place des dataframes
-Data_train = Data0
-Data_test = Data1
+Data_train = new_Data0
+Data_test = new_Data1
 Data_train$Time <- as.numeric(Data_train$Date)
 Data_test$Time <- as.numeric(Data_test$Date)
 names(Data_train)
