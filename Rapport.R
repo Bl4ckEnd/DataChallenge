@@ -42,6 +42,9 @@ sel_b <- which(Data_train$Year>2019)
 
 Data0 <- Data_train[sel_a, ]
 Data1 <- Data_train[sel_b, ]
+Data_test = add_column(Data_test, Load=lead(Data_test$Load.1, default=mean(Data_test$Load.1)), .after = "Date")
+
+
 
 equation <- "Load ~ Load.1:as.factor(WeekDays) + HI + BH + Christmas_break + Summer_break + DLS + s(Temp) + s(Temp_s99_max, Temp_s99_min)+ s(Load.7) + s(Time, k=7) + s(toy, k =30, bs = 'cc', by=as.factor(WD))+ s(Temp, Time, k=20)"
 
@@ -65,53 +68,22 @@ formule <- "Load ~ Month + Temp_s95_min + Temp_s95_max + HI + TauxPopMovement +T
 rf<- ranger::ranger(formule, data = Data_train, importance =  'permutation')
 rf.forecast <- predict(rf, data = Data_test)$predictions
 
-Data_test = add_column(Data_test, Load=lead(Data_test$Load.1, default=mean(Data_test$Load.1)), .after = "Date")
 plot(Data_test$Load, type='l')
 lines(rf.forecast, type='l', col='red')
 rmse(Data_test$Load[1:274], rf.forecast[1:274])
 
-#Best 1056 in whole rmse 
 gam9<-qgam(equation%>%as.formula, data=Data_train, qu=0.4)
 gam9.forecast <- predict(gam9, newdata=Data_test)
 
 plot(Data_test$Load, type='l')
 lines(gam9.forecast, type='l', col='red')
-
 rmse(Data_test$Load[1:274], gam9.forecast[1:274])
 
-#Mini aggregation d'experts 
-experts <- cbind(gam9.forecast, pred,rf.forecast)%>%as.matrix
-nom_exp <- c("qgam", "polynomial lm", "rf")
-colnames(experts) <-  nom_exp
-
-rmse_exp <- apply(experts, 2, rmse, y=Data_test$Load)
-sort(rmse_exp)
-cumsum_exp <- apply(Data_test$Load-experts, 2, cumsum)
-
-or <- oracle(Y=Data_test$Load, experts);or
-plot(Data_test$Date, Data_test$Load, type='l')
-lines(Data_test$Date, or$prediction, typpe='l', col='red')
-#CRAZY RESULT: 770
-rmse(or$prediction[1:274], y=Data_test$Load[1:274])
-
-expertsM3000 <- experts-2000
-expertsP3000 <- experts+2000
-experts <- cbind(experts, expertsM3000, expertsP3000)
-colnames(experts) <-c(nom_exp, paste0(nom_exp,  "M"), paste0(nom_exp,  "P"))
-cumsum_exp <- apply(Data_test$Load-experts, 2, cumsum)
-
-
-agg <- mixture(Y = Data_test$Load, experts = experts, loss.gradient=TRUE)
-summary(agg)
-plot(Data_test$Date, Data_test$Load, type='l')
-lines(Data_test$Date, agg$prediction, type='l', col='red')
-rmse(agg$prediction[1:274], y=Data_test$Load[1:274]) #837
-
-##### SUBMISSION qgamL19 : agg: even though is 720 --> overall score is much better 
-
 ######online learning
+# static 
 
 X <- predict(gam9, newdata=Data_train, type='terms')
+y = Data_train$Load
 ###scaling columns
 for (j in 1:ncol(X)){
   X[,j] <- (X[,j]-mean(X[,j])) / sd(X[,j])
@@ -126,7 +98,6 @@ for (j in 1:ncol(X_test)){
 X_test <- cbind(X_test,1)
 y_test <- Data_test$Load
 
-# static 
 ssm <- viking::statespace(X, y)
 gam9.kalman.static <- ssm$pred_mean%>%tail(nrow(Data_test))
 ssm_dyn <- viking::select_Kalman_variances(ssm, X, y, q_list = 2^(-30:0), p1 = 1, ncores = 6)
@@ -134,6 +105,41 @@ ssm_dyn <- viking::select_Kalman_variances(ssm, X, y, q_list = 2^(-30:0), p1 = 1
 ssm_dyn <- predict(ssm_dyn, X_test, y_test, type='model', compute_smooth = TRUE)
 gam9.kalman.Dyn <- ssm_dyn$pred_mean%>%tail(nrow(Data_test))
 plot(Data_test$Date, Data_test$Load, type='l')
-lines(Data_test$Date, 0.05*gam9.kalman.Dyn + 0.95*gam9.forecast, type='l', col='red')
-rmse(Data_test$Load, 0.05*gam9.kalman.Dyn + 0.95*gam9.forecast)
+
+#Mini aggregation d'experts 
+experts <- cbind(gam9.forecast, pred,rf.forecast, gam9.kalman.Dyn)%>%as.matrix
+nom_exp <- c("qgam", "polynomial lm", "rf", "Kalman")
+colnames(experts) <-  nom_exp
+
+rmse_exp <- apply(experts, 2, rmse, y=Data_test$Load)
+sort(rmse_exp)
+cumsum_exp <- apply(Data_test$Load-experts, 2, cumsum)
+
+or <- oracle(Y=Data_test$Load, experts);or
+plot(Data_test$Date, Data_test$Load, type='l')
+lines(Data_test$Date, or$prediction, type='l', col='red')
+#CRAZY RESULT: 746 (but oracle)
+rmse(or$prediction[1:274], y=Data_test$Load[1:274])
+
+expertsM3000 <- experts-2000
+expertsP3000 <- experts+2000
+experts <- cbind(experts, expertsM3000, expertsP3000)
+colnames(experts) <-c(nom_exp, paste0(nom_exp,  "M"), paste0(nom_exp,  "P"))
+cumsum_exp <- apply(Data_test$Load-experts, 2, cumsum)
+
+
+agg <- mixture(Y = Data_test$Load, experts = experts, model="BOA", loss.gradient=TRUE)
+summary(agg)
+
+
+or <- oracle(Y=Data_test$Load, experts);
+
+plot(Data_test$Date, Data_test$Load, type='l')
+lines(Data_test$Date, agg$prediction, type='l', col='red')
+rmse(agg$prediction[1:274], y=Data_test$Load[1:274]) #1070
+
+##### SUBMISSION qgamL19 : agg: even though is 720 --> overall score is much better 
+
+
+
 
