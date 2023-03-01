@@ -3,11 +3,11 @@ title: "Modélisation Prédictive Rapport"
 author: "Valentin Gölz, Laura Fuentes"
 date: "February 28, 2023"
 output:
-  html_document:
-    df_print: paged
   pdf_document: 
     toc : true
     template: default
+  html_document:
+    df_print: paged
 ---
 \newpage
 # Introduction
@@ -199,14 +199,11 @@ rmse(arima.predict, Data1$Load)
 ### Filtre Kalman 
 Une fois le modèle qgam amélioré le modèle qgam, nous avons décidé d’implémenter le online-learning. Cette méthode nous permet d’aborder le problème de données d’entraînement insuffisantes pour la période covid. En effet, le filtre Kalman dynamique met à jour l’estimation des poids séquentiellement, au fur et mesure des prédictions …ajouter ici ce que dynamique fait en particulier….. Pour simplifier la situation covid, nous avons créé la variable GRI_factor, étant une variable catégorielle à trois facteurs (none: 0-50, medium: 50-62, high:62-70). Ceci nous permet faire une mise au point de la situation covid avec du online-learning. Malheureusement, les résultats étaient meilleurs sans cette variable. C’est pour cela que nous avons décidé de continuer avec le modèle qgam précédent pour le online learning. 
 
-```{r Kalman Filter , include=TRUE}
+```{r Kalman Filter , echo=FALSE, results='hide', keep.fig='all'}
+######online learning
 # static 
 #On doit le faire ici sur tout le jeu train car sinon on n'a pas d'effectifs dans chaque sous modalité
-equation <- "Load ~ Load.1:as.factor(WeekDays) + HI + BH + Christmas_break + Summer_break + DLS + s(Temp) + s(Temp_s99_max, Temp_s99_min)+ s(Load.7) + s(Time, k=7) + s(toy, k =30, bs = 'cc', by=as.factor(WD))+ s(Temp, Time, k=20)"
-gam8<-qgam(equation%>%as.formula, data=Data_train, qu=0.4)
-gam8.forecast <- predict(gam8, newdata=Data_test)
-
-X <- predict(gam8, newdata=Data_train, type='terms')
+X <- predict(gam9, newdata=Data_train, type='terms')
 y = Data_train$Load
 ###scaling columns
 for (j in 1:ncol(X)){
@@ -215,30 +212,18 @@ for (j in 1:ncol(X)){
 X <- cbind(X,1)
 d <- ncol(X)
 
-X_test <- predict(gam8, newdata=Data_test, type='terms')
-for (j in 1:ncol(X_test)){
-  X_test[,j] <- (X_test[,j]-mean(X_test[,j])) / sd(X_test[,j])
-}
-X_test <- cbind(X_test,1)
-y_test <- Data_test$Load
 
 #dynamic
 ssm <- viking::statespace(X, y)
-gam9.kalman.static <- ssm$pred_mean%>%tail(nrow(Data_test))
-ssm_dyn <- viking::select_Kalman_variances(ssm, X, y, q_list = 2^(-30:0), p1 = 1, ncores = 6)
-
-ssm_dyn <- predict(ssm_dyn, X_test, y_test, type='model', compute_smooth = TRUE)
-gam9.kalman.Dyn <- ssm_dyn$pred_mean%>%tail(nrow(Data_test))
-
-#plot
-plot_data <- tibble(x=Data_test$Date, y=Data_test$Load, y1=gam9.kalman.Dyn)
-p <- ggplot(plot_data, aes(x)) +
-  geom_line(aes(y=y, color="True Load")) +
-  geom_line(aes(y=y1, color="Kalman Pred"), linetype="twodash", alpha=0.8) +
-  labs(x="Date", y="Load", title="Load vs Predicted Load") +
-  scale_color_manual(name="Legend", values=c("True Load"="black", "Kalman Pred"="red"))
-p
-rmse(Data_test$Load, gam9.kalman.Dyn)
+gam9.kalman.static <- ssm$pred_mean%>%tail(nrow(Data1))
+#ssm_dyn <- viking::select_Kalman_variances(ssm, X[sel_a,], y[sel_a], q_list = 2^(-30:0), p1 = 1, ncores = 6)
+#saveRDS(ssm_dyn, "../Results/Kalman_filter_Data_train.RDS")
+ssm_dyn = readRDS("../Results/Kalman_filter_Data_train.RDS")
+ssm_dyn <- predict(ssm_dyn, X, y, type='model', compute_smooth = TRUE)
+gam9.kalman.Dyn <- ssm_dyn$pred_mean%>%tail(nrow(Data1))
+plot(Data1$Date, Data1$Load, type='l')
+lines(Data1$Date, gam9.kalman.Dyn, type='l', col='red')
+rmse(Data1$Load, gam9.kalman.Dyn)
 ``` 
 
 ## Pipeline basée sur le modèle qgam
@@ -318,8 +303,8 @@ Comme dernière méthode, nous avons décidé de mettre en place un agrégation 
 Le modèle obtenu par combinaison des différents prédicteurs obtient une performance bien meilleure que celle obtenue auparavant. Comme on peut le voir dans la figure, le modèle BOA permet d’ajuster les coefficients des modèles de façon variable sur chaque partie.  
 
 ```{r QGAM + Blocks résiduals + RF + Arima , include=TRUE}
-experts <- cbind(gam9.forecast, pred2,rf.forecast, gam.forecast, arima.predict, as.numeric(gam9.arima.forecast))%>%as.matrix
-nom_exp <- c("qgam", "polynomial_lm", "rf", "gam", "arima", "pipeline")
+experts <- cbind(gam9.forecast, pred2,rf.forecast, gam.forecast, gam9.kalman.Dyn, arima.predict, as.numeric(gam9.arima.forecast))%>%as.matrix
+nom_exp <- c("qgam", "polynomial_lm", "rf", "gam", "kalman", "arima", "pipeline")
 colnames(experts) <-  nom_exp
 
 rmse_exp <- apply(experts, 2, rmse, y=Data1$Load)
@@ -334,10 +319,10 @@ colnames(experts) <-c(nom_exp, paste0(nom_exp,  "M"), paste0(nom_exp,  "P"))
 cumsum_exp <- apply(Data1$Load-experts, 2, cumsum)
 
 par(mfrow=c(1,1))
-agg <- mixture(Y = Data1$Load, experts = experts, model="BOA", loss.gradient=TRUE)
+agg <- mixture(Y = Data1$Load, experts = experts, loss.gradient=TRUE)
 summary(agg)
 ####PLOT EXPERT AGGREGATION
-plot(agg)
+#plot(agg)
 or <- oracle(Y=Data1$Load, experts);or
 
 par(mfrow=c(1,1))
@@ -348,12 +333,10 @@ rmse(agg$prediction, y=Data1$Load)
 ```
 La figure finale avec presque tous nos modèles sur les données train (sel_a): 
 ```{r Figure modèles , include=TRUE}
-models = c(Data1$Load, pred2, rf.forecast, gam9.forecast, gam.forecast, gam9.arima.forecast, agg$prediction)
+models = c(Data1$Load, pred2, rf.forecast, gam.forecast, gam9.forecast, gam9.kalman.Dyn, gam9.arima.forecast, agg$prediction)
 K <-ncol(models)
 col <- rev(RColorBrewer::brewer.pal(n = max(min(K,8),6),name = "Spectral"))[1:min(K,8)]
-nom_mod <- c("Real_load", "polynomial_lm", "Random_forest", "gam","qgam", "pipeline", "agg_exp")
-
-# !!! change plot to ggplot
+nom_mod <- c("Real_load", "polynomial_lm", "Random_forest", "gam","qgam","kalman", "pipeline", "agg_exp")
 
 plot(Data1$Date,Data1$Load, type='l', ylab='Real_load', col="darkblue", main="Prédictions",lwd=3 )
 lines(Data1$Date,pred2, type='l', ylab = "polynomial_lm", col='forestgreen')
@@ -363,10 +346,12 @@ lines(Data1$Date,rf.forecast, type='l',  ylab='rf',col= "lightgreen")
 lines(Data1$Date,gam.forecast, type='l', ylab='gam',col="yellow")
 #qgam
 lines(Data1$Date,gam9.forecast, type='l', ylab='qgam',col="orange")
+#kalman
+lines(Data1$Date,gam9.forecast, type='l', ylab='qgam',col="darkorange")
 #Pipeline
-lines(Data1$Date,gam9.arima.forecast, type='l', ylab='qgam',col="darkorange")
+lines(Data1$Date,gam9.kalman.Dyn, type='l', ylab='qgam',col="red")
 #Aggregation d'experts
-lines(Data1$Date, agg$prediction, type='l', ylab='agg_exp', col='red')
+lines(Data1$Date, agg$prediction, type='l', ylab='agg_exp', col='darkred')
 legend("bottomleft", col=col, legend=nom_mod, lty=1, bty='n')
 ```
 Nous pouvons voir sur la figure, que le modèle  le plus performant est effectivement issu de la combinaison des autres modèles. !!!! COMMENTER !!!
@@ -376,3 +361,5 @@ Nous pouvons voir sur la figure, que le modèle  le plus performant est effectiv
 # Conclusion
 
 Dans ce travail, nous avons testé plusieurs modèles différents pour prédire la charge électrique de la France. Si nos modèles les plus simples donnaient déjà des résultats exploitables, les plus complexes étaient encore plus prometteurs. Le plus grand défi a été le fait que la période de test a été fixée pendant la pandémie de covid, rendant la prévision plus difficile. Notre meilleur modèle est un modèle additif généralisé avec régression quantile. L'utilisation de techniques telles que l'agrégation d'experts et l'apprentissage en ligne a encore amélioré notre précision. Un autre défis, était le fait qu’au niveau des jeux de données train issus de sel_a, on n’avait pas encore du covid. Ceci créait un biais entre les scores prévus et ceux sur Kaggle.  En effet, en entraînant le jeu de données train tout entier, on avait un mois de covid, ce qui améliorait nettement nos résultats. 
+
+
