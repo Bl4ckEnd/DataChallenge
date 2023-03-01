@@ -18,8 +18,8 @@ load("../Data/Data1.Rda")
 ### Change weekdays --> saturdays if govresponseindex>0.70
 
 ###Mise en place des dataframes
-Data_train = new_Data0
-Data_test = new_Data1
+Data_train = Data0
+Data_test = Data1
 Data_train$Time <- as.numeric(Data_train$Date)
 Data_test$Time <- as.numeric(Data_test$Date)
 Data_train$GRI_factor = as.factor(Data_train$GRI_factor)
@@ -125,11 +125,7 @@ rmse(arima.predict, Data1$Load)
 ######online learning
 # static 
 #On doit le faire ici sur tout le jeu train car sinon on n'a pas d'effectifs dans chaque sous modalité
-equation <- "Load ~ Load.1:as.factor(WeekDays) + HI + BH + Christmas_break + Summer_break + DLS + s(Temp) + s(Temp_s99_max, Temp_s99_min)+ s(Load.7) + s(Time, k=7) + s(toy, k =30, bs = 'cc', by=as.factor(WD))+ s(Temp, Time, k=20)"
-gam8<-qgam(equation%>%as.formula, data=Data_train, qu=0.4)
-gam8.forecast <- predict(gam8, newdata=Data_test)
-
-X <- predict(gam8, newdata=Data_train, type='terms')
+X <- predict(gam9, newdata=Data_train, type='terms')
 y = Data_train$Load
 ###scaling columns
 for (j in 1:ncol(X)){
@@ -138,23 +134,18 @@ for (j in 1:ncol(X)){
 X <- cbind(X,1)
 d <- ncol(X)
 
-X_test <- predict(gam8, newdata=Data_test, type='terms')
-for (j in 1:ncol(X_test)){
-  X_test[,j] <- (X_test[,j]-mean(X_test[,j])) / sd(X_test[,j])
-}
-X_test <- cbind(X_test,1)
-y_test <- Data_test$Load
 
 #dynamic
 ssm <- viking::statespace(X, y)
-gam9.kalman.static <- ssm$pred_mean%>%tail(nrow(Data_test))
-ssm_dyn <- viking::select_Kalman_variances(ssm, X, y, q_list = 2^(-30:0), p1 = 1, ncores = 6)
-
-ssm_dyn <- predict(ssm_dyn, X_test, y_test, type='model', compute_smooth = TRUE)
-gam9.kalman.Dyn <- ssm_dyn$pred_mean%>%tail(nrow(Data_test))
-plot(Data_test$Date, Data_test$Load, type='l')
-lines(Data_test$Date, gam9.kalman.Dyn, type='l', col='red')
-rmse(Data_test$Load, gam9.kalman.Dyn)
+gam9.kalman.static <- ssm$pred_mean%>%tail(nrow(Data1))
+#ssm_dyn <- viking::select_Kalman_variances(ssm, X[sel_a,], y[sel_a], q_list = 2^(-30:0), p1 = 1, ncores = 6)
+#saveRDS(ssm_dyn, "../Results/Kalman_filter_Data_train.RDS")
+#ssm_dyn = readRDS("../Results/Kalman_filter_Data_train.RDS")
+ssm_dyn <- predict(ssm_dyn, X, y, type='model', compute_smooth = TRUE)
+gam9.kalman.Dyn <- ssm_dyn$pred_mean%>%tail(nrow(Data1))
+plot(Data1$Date, Data1$Load, type='l')
+lines(Data1$Date, gam9.kalman.Dyn, type='l', col='red')
+rmse(Data1$Load, gam9.kalman.Dyn)
 
 ####Pipeline
 Nblock<-10
@@ -223,8 +214,8 @@ gam9.arima.forecast <- gam9.forecast + prevARIMA.res
 
 
 #####Aggregation d'experts 
-experts <- cbind(gam9.forecast, pred,rf.forecast, gam.forecast, arima.predict, as.numeric(gam9.arima.forecast))%>%as.matrix
-nom_exp <- c("qgam", "polynomial_lm", "rf", "gam", "arima", "pipeline")
+experts <- cbind(gam9.forecast, pred,rf.forecast, gam.forecast, gam9.kalman.Dyn, arima.predict, as.numeric(gam9.arima.forecast))%>%as.matrix
+nom_exp <- c("qgam", "polynomial_lm", "rf", "gam", "kalman", "arima", "pipeline")
 colnames(experts) <-  nom_exp
 
 rmse_exp <- apply(experts, 2, rmse, y=Data1$Load)
@@ -239,7 +230,7 @@ colnames(experts) <-c(nom_exp, paste0(nom_exp,  "M"), paste0(nom_exp,  "P"))
 cumsum_exp <- apply(Data1$Load-experts, 2, cumsum)
 
 par(mfrow=c(1,1))
-agg <- mixture(Y = Data1$Load, experts = experts, model="BOA", loss.gradient=TRUE)
+agg <- mixture(Y = Data1$Load, experts = experts, loss.gradient=TRUE)
 summary(agg)
 ####PLOT EXPERT AGGREGATION
 plot(agg)
@@ -250,14 +241,14 @@ plot(Data1$Date, Data1$Load, type='l')
 lines(Data1$Date, or$prediction, type='l', col='yellow')
 lines(Data1$Date, agg$prediction, type='l', col='red')
 rmse(agg$prediction, y=Data1$Load)
-#with Data1 it's really improved: 1900 -> 1446
+#with Data1 it's really improved: 1900 -> 1339
 
 
 ####FIGURE PLOT 
-models = c(Data1$Load, pred, rf.forecast, gam9.forecast, gam.forecast, gam9.arima.forecast, agg$prediction)
+models = c(Data1$Load, pred, rf.forecast, gam.forecast, gam9.forecast, gam9.kalman.Dyn, gam9.arima.forecast, agg$prediction)
 K <-ncol(models)
 col <- rev(RColorBrewer::brewer.pal(n = max(min(K,8),6),name = "Spectral"))[1:min(K,8)]
-nom_mod <- c("Real_load", "polynomial_lm", "Random_forest", "gam","qgam", "pipeline", "agg_exp")
+nom_mod <- c("Real_load", "polynomial_lm", "Random_forest", "gam","qgam", "kalman", "pipeline", "agg_exp")
 
 plot(Data1$Date,Data1$Load, type='l', ylab='Real_load', col="darkblue", main="Prédictions",lwd=3 )
 lines(Data1$Date,pred, type='l', ylab = "polynomial_lm", col='forestgreen')
