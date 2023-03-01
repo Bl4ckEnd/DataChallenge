@@ -18,8 +18,8 @@ load("../Data/Data1.Rda")
 ### Change weekdays --> saturdays if govresponseindex>0.70
 
 ###Mise en place des dataframes
-Data_train = new_Data0
-Data_test = new_Data1
+Data_train = Data0
+Data_test = Data1
 Data_train$Time <- as.numeric(Data_train$Date)
 Data_test$Time <- as.numeric(Data_test$Date)
 Data_train$GRI_factor = as.factor(Data_train$GRI_factor)
@@ -126,8 +126,10 @@ rmse(arima.predict, Data_test$Load)
 #On doit le faire ici sur tout le jeu train car sinon on n'a pas d'effectifs dans chaque sous modalité
 equation <- "Load ~ Load.1:as.factor(WeekDays) + HI + BH + Christmas_break + Summer_break + DLS + s(Temp) + s(Temp_s99_max, Temp_s99_min)+ s(Load.7) + s(Time, k=7) + s(toy, k =30, bs = 'cc', by=as.factor(WD))+ s(Temp, Time, k=20)"
 
-X <- predict(gam9, newdata=Data_train, type='terms')
-y = Data_train$Load
+Data = dplyr::bind_rows(Data_train, Data_test[-21])
+
+X <- predict(gam9, newdata=Data, type='terms')
+y = Data$Load
 ###scaling columns
 for (j in 1:ncol(X)){
   X[,j] <- (X[,j]-mean(X[,j])) / sd(X[,j])
@@ -135,24 +137,17 @@ for (j in 1:ncol(X)){
 X <- cbind(X,1)
 d <- ncol(X)
 
-X_test <- predict(gam9, newdata=Data_test, type='terms')
-for (j in 1:ncol(X_test)){
-  X_test[,j] <- (X_test[,j]-mean(X_test[,j])) / sd(X_test[,j])
-}
-X_test <- cbind(X_test,1)
-y_test <- Data_test$Load
 
 #dynamic
-
 ssm <- viking::statespace(X, y)
 gam9.kalman.static <- ssm$pred_mean%>%tail(nrow(Data_test))
-ssm_dyn <- viking::select_Kalman_variances(ssm, X, y, q_list = 2^(-30:0), p1 = 1, ncores = 6)
+ssm_dyn <- viking::select_Kalman_variances(ssm, X[1:3051,], y[1:3051], q_list = 2^(-30:0), p1 = 1, ncores = 6)
 
-ssm_dyn <- predict(ssm_dyn, X_test, y_test, type='model', compute_smooth = TRUE)
+ssm_dyn <- predict(ssm_dyn, X, y, type='model', compute_smooth = TRUE)
 gam9.kalman.Dyn <- ssm_dyn$pred_mean%>%tail(nrow(Data_test))
 plot(Data_test$Date, Data_test$Load, type='l')
 lines(Data_test$Date, gam9.kalman.Dyn, type='l', col='red')
-rmse(Data_test$Load, gam9.kalman.Dyn)
+rmse(Data_test$Load, gam9.kalman.Dyn) #1670
 
 ####### Pipeline
 Nblock<-10
@@ -258,10 +253,10 @@ lines(Data_test$Date, agg$prediction, type='l', col='orange')
 rmse(agg$prediction[1:274], y=Data_test$Load[1:274]) #949
 
 ##### SUBMISSION qgamL19 : agg: even though is 720 --> overall score is much better 
-models = c(Data1$Load, pred, rf.forecast, gam.forecast, gam9.forecast, gam9.arima.forecast, agg$prediction)
+models = c(Data1$Load, pred, rf.forecast, gam.forecast, gam9.forecast, gam9.kalman.Dyn, gam9.arima.forecast, agg$prediction)
 K <-ncol(models)
 col <- rev(RColorBrewer::brewer.pal(n = max(min(K,6),4),name = "Spectral"))[1:min(K,6)]
-nom_mod <- c("Real_load", "polynomial_lm", "Random_forest", "gam", "qgam","pipeline", "agg_exp")
+nom_mod <- c("Real_load", "polynomial_lm", "Random_forest", "gam", "qgam", "kalman","pipeline", "agg_exp")
 
 plot(Data_test$Date,Data_test$Load, type='l', ylab='Real_load', col="darkblue", main="Prédictions", lwd=4)
 #Polynomial lm
@@ -274,6 +269,9 @@ lines(Data_test$Date,gam.forecast, type='l', ylab='qgam',col="yellow")
 lines(Data_test$Date,gam9.forecast, type='l', ylab='qgam',col="orange")
 #pipeline
 lines(Data_test$Date,gam9.arima.forecast, type='l', ylab='qgam',col="darkorange")
+#kalman 
+lines(Data_test$Date,gam9.kalman.Dyn, type='l', ylab='qgam',col="red")
 #Aggregation d'experts
-lines(Data_test$Date, agg$prediction, type='l', ylab='agg_exp', col='red')
+lines(Data_test$Date, agg$prediction, type='l', ylab='agg_exp', col='darkred')
 legend("topleft", col=col, legend=nom_mod, lty=1, bty='n')
+
