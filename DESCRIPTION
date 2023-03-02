@@ -2,3 +2,4 @@ Package: GOLZ_FUENTES
 Type: Package
 Title: Final Project Predictive Modeling
 Version: 0.0.1.0
+Description: We implemented different models to perform Load forecasting during Covid Period in France. You can find our datasets in the folder "Data". Our final implementations can be found in the file "Models_full_train_set". All documents related to the report are in the folder "Rapport". Finally, you can find our some of our models trained on the Data0 or whole train set in "Results" and respectively in "Results/full_set_models". 
