@@ -264,3 +264,8 @@ rmse(Data_test$Load[1:274], ychap = agg$prediction[1:274])
 #submit$Load <- or$prediction
 #write.table(submit, file="Data/submission_qgamL18.csv", quote=F, sep=",", dec='.',row.names = F)
 
+##### SUBMISSION qgamL20 :
+#LOWEST SCORE ON THE WHOLE TEST THING :) 
+submit <- read_delim( file="../Data/sample_submission.csv", delim=",")
+submit$Load <- agg$prediction
+write.table(submit, file="../Data/submission_qgamL20.csv", quote=F, sep=",", dec='.',row.names = F)
