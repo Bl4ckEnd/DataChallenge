@@ -9,10 +9,10 @@ output:
   html_document:
     df_print: paged
 ---
-\newpage
 # Introduction
-Nous avons un jeu de données regroupant différentes variables en rapport avec la consommation énergétique française pendant la période de 2012 à 2021. Notre but est de construire un modèle qui permet de prédire la consommation française en énergie pendant la période du Covid. 
+Dans ce projet, nous avons considéré un jeu de données regroupant différentes variables en rapport avec la consommation énergétique en France pendant la période de 2012 à 2021. Notre but est de construire un modèle qui permet de prédire la consommation française en énergie pendant la période du Covid. Pour cela, nous effectuerons un choix de variables, et complexifierons au fur et a mesure l'équation et le modèle choisi. Enfin, nous mettrons en place une pipeline et aggrégation d'experts pour aboutir à un modèle plus robuste et performant. 
 
+## Mise en place du jeu de données
 Le premier réflexe est de télécharger l'ensemble des packages et diviser le set train en deux pour pouvoir tester nos modèles avant de les soumettre. Nous avons ainsi choisi la période de 2012 - 2019 comme train et 2019-(15/04/2020) comme test.
 
 ```{r, setup, include=FALSE}
@@ -46,10 +46,8 @@ Data_train = Data0
 Data_test = Data1
 Data_train$Time <- as.numeric(Data_train$Date)
 Data_test$Time <- as.numeric(Data_test$Date)
-#names(Data_train)
-#names(Data_test)
-#dim(Data_train)
-#dim(Data_test)
+#names(Data_train);names(Data_test)
+#dim(Data_train);dim(Data_test)
 
 #Faire des train et test à partir de Data0
 sel_a <- which(Data_train$Year<=2019)
@@ -63,19 +61,39 @@ Data_test = add_column(Data_test, Load=lead(Data_test$Load.1, default=mean(Data_
 
 # Choix du type de modèle 
 
-Pour commencer, nous avons créé tout d'abord, la variable *WeekDays2*. Il s'agit d'une version modifiée de la variable WeekDays qui distingue les jours laboraux, samedis et dimanches. Nous avons d'autre part récupéré des données des différents mouvements sociaux et le pourcentage de population mobilisée. Pendant les jours avec des manifestations, *Movement* est 1 et 0 sinon. Les données viennent de SNCF. Ensuite nous avons créé une variable mesurant la température ressentie. Le problème de cette dernière variable concernait les nombreuses valeurs NA's, ainsi que la représentativité au niveau national des stations météorologiques constituant les données.
+Pour commencer, nous avons créé de nouvelles variables à partir de variables déjà existantes. C'est le cas de *WeekDays2*, *GRI_factor* et *WD*. Nous avons d'autre part récupéré des données des différents mouvements sociaux et le pourcentage de population mobilisée. Cette variable, *Movement*, les jours de grève prennent la valeur 1 et 0 sinon. Ces données viennent de SNCF. Ensuite nous avons créé une variable mesurant la température ressentie. Le problème de cette dernière variable concernait les nombreuses valeurs NA's, ainsi que la représentativité au niveau national des stations météorologiques constituant les données. C'est pour cela que nous ne l'avons pas utilisé au final. 
 
-Pour comprendre quelles variables sont plus significatives, et argumenter le choix, nous allons effectuer une random forest, et regarder l'importance des variables.
-
+Pour comprendre quelles variables sont plus significatives et argumenter le choix, nous avons effectué une forêt aléatoire, et regardé l'importance des variables. On a aussi vu que la RMSE associée n'est pas très bonne. 
 ```{r, Choix des variables avec random forest, include=TRUE}
 equation <- "Load~  Time + toy + Temp + Load.1 + Load.7 + Temp_s99 + WeekDays + 
   BH + Temp_s95_max + 
   Temp_s99_max + Summer_break  + Christmas_break + 
   Temp_s95_min +Temp_s99_min + DLS + GovernmentResponseIndex + TauxPopMovement +
   Movement + HI + WD"
+
 rf <- ranger(equation, data=Data0, importance =  'permutation')
 ```
 
+```{r Random forest, include=FALSE}
+formule <- "Load ~ Month + Temp_s95_min + Temp_s95_max + HI + TauxPopMovement +
+  Time + toy + Temp + Load.1 + Load.7 + WD + BH + Temp_s99_min + Temp_s99_max +
+  Summer_break  + Christmas_break  + DLS"
+
+rf<- ranger::ranger(formule, data = Data0, importance =  'permutation')
+rf.forecast <- predict(rf, data = Data1)$predictions
+```
+
+```{r}
+rmse(Data1$Load, rf.forecast)
+plot_data <- tibble(x=Data1$Date, y=Data1$Load, y1=rf.forecast)
+p <- ggplot(plot_data, aes(x)) +
+  geom_line(aes(y=y, color="True Load")) +
+  geom_line(aes(y=y1, color="RF Pred"), linetype="twodash", alpha=0.8) +
+  labs(x="Date", y="Load", title="Load vs Predicted Load") +
+  scale_color_manual(name="Legend",
+                     values=c("True Load"="black", "RF Pred"="red"))
+p
+```
 ```{r, fig.height=3.5}
 #############importance plot
 imp <- rf$variable.importance
@@ -83,7 +101,7 @@ imp <- sort(imp)
 o <- order(imp, decreasing=T)
 nom <- names(imp)
 plot(c(1:length(imp)), imp[o], type='h', ylim = c(0, max(imp) + max(imp)/5),
-     xlab='', ylab='Importance (permutation)')
+     xlab='', ylab='Importance (permutation)', cex=0.6)
 K <- length(imp)
 text(tail(c(1:length(imp)), K), tail(imp[o]+max(imp/8), K),
      labels= tail(nom[o], K), pos=3, srt=90, adj=1, cex=0.6)
@@ -91,7 +109,7 @@ points(c(1:length(imp)), imp[o], pch=20)
 ```
 
 Nous pouvons ainsi bien remarquer que les variables à plus forte importance sont: 
-*Load.1*, *Load.7*, les variables relatives à la *température*, *WeekDays*, *WD*, *BH*, *toy*, *Summer_break*, *DLS* and *Christmas_break*. Nous avons également vérifié que la variable *Movement* (=taux de la population qui a manifesté) n’était pas explicative à l’aide de ANOVA.
+*Load.1*, *Load.7*, les variables relatives à la *température*, *WeekDays*, *WD*, *BH*, *toy*, *Summer_break*, *DLS* and *Christmas_break*. Nous avons également vérifié que la variable *Movement* (taux de la population participant à la manifestation) n’était pas explicative à l’aide de ANOVA.
 
 ```{r, message=TRUE}
 formula1 <- "Load ~ Temp + WeekDays + WD + BH+ toy + Summer_break + DLS +
@@ -106,7 +124,7 @@ summary(anova.res)
 
 ## Linear models
 ### Simple linear model 
-Pour comprendre et appréhender le cadre d'étude nous commencerons par effectuer un modèle simple. C'est-à-dire un modèle linéaire avec les co-variables choisies précédemment. Nous avons considéré que la consommation de la veille changeait en fonction du jour de la semaine. C'est pour cela que nous avons décidé de créer une fonction de la consommation de la veille en fonction de chaque catégorie de *WeekDays*.
+Pour comprendre et appréhender le cadre de l'étude, nous commencerons par effectuer un modèle simple. C'est-à-dire un modèle linéaire avec les co-variables choisies précédemment. Nous avons considéré que la consommation de la veille changeait en fonction du jour de la semaine. C'est pour cela que nous avons décidé de créer une fonction de la consommation de la veille en fonction de chaque catégorie de *WeekDays*.
 
 ```{r, Linear Models, include=TRUE, echo=TRUE, message=TRUE}
 formula <- "Load ~Load.1 + WeekDays + Load.7 + Temp  + Temp_s99_max +
@@ -118,7 +136,7 @@ rmse(Data1$Load, pred1)
 ```
 
 ### Polynomial transformations
-Nous avons mis en place des transformations polynomiales sur le modèle linéaire comme une première approche de complexification du modèle.  Pour cela, nous avons ajouté les co-variables relatives à la *température*  et *Load.7* au carré.
+Nous avons mis en place des transformations polynomiales sur le modèle linéaire comme une première approche de complexification du modèle.  Pour cela, nous avons ajouté les co-variables relatives à la température et *Load.7* au carré.
 
 ```{r, Linear Models avec transformations polynomiales, include=TRUE, echo=TRUE, message=TRUE}
 formula <- "Load ~Load.1 + WeekDays + Load.7 + I(Load.7^2) + Temp + I(Temp^2) +
@@ -129,7 +147,7 @@ slm <- lm(formula%>%as.formula, data=Data0)
 pred2 = predict(slm, newdata=Data1)
 rmse(Data1$Load, pred2)
 ```
-
+Dans cette figure, nous observons que le modèle linéaire polynomial a une meilleure performance en début janvier et au niveau des pics pendant le Covid. Ce résultats se voit aussi au niveau de la RMSE. 
 ```{r}
 plot_data <- tibble(x=Data1$Date, y=Data1$Load, y1=pred1, y2=pred2)
 p <- ggplot(plot_data, aes(x)) +
@@ -142,32 +160,11 @@ p <- ggplot(plot_data, aes(x)) +
 p
 ```
 
-## Random Forest
-```{r Random forest, include=TRUE, message=TRUE, echo=TRUE}
-formule <- "Load ~ Month + Temp_s95_min + Temp_s95_max + HI + TauxPopMovement +
-  Time + toy + Temp + Load.1 + Load.7 + WD + BH + Temp_s99_min + Temp_s99_max +
-  Summer_break  + Christmas_break  + DLS"
-
-rf<- ranger::ranger(formule, data = Data0, importance =  'permutation')
-rf.forecast <- predict(rf, data = Data1)$predictions
-rmse(Data1$Load, rf.forecast)
-```
-
-```{r}
-plot_data <- tibble(x=Data1$Date, y=Data1$Load, y1=rf.forecast)
-p <- ggplot(plot_data, aes(x)) +
-  geom_line(aes(y=y, color="True Load")) +
-  geom_line(aes(y=y1, color="RF Pred"), linetype="twodash", alpha=0.8) +
-  labs(x="Date", y="Load", title="Load vs Predicted Load") +
-  scale_color_manual(name="Legend",
-                     values=c("True Load"="black", "RF Pred"="red"))
-p
-```
 
 ## Modèles additifs généralisés
 ### Choix de la partie linéaire et spline 
 
-Dans la suite, nous avons considéré de mettre en place des Modèles Additifs généralisés. Pour cela, nous avons d'abord distingué les variables à mettre dans la partie linéaire du modèle, puis dans la partie spline. Nous avons intégré les variables qualitatives ainsi que la consommation de la veille en fonction du jour de la semaine dans la partie linéaire. On a ajouté dans la partie spline les variables ayant une notion de temporalité comme la consommation de la semaine ou les températures. Nous avons également regroupé dans une même spline des variables ayant une relation logique, comme c'était le cas avec la température et le temps. Nous avons également créé une fonction spline pour chaque jour de la semaine pour la variable *toy* pour ne pas négliger l'effet des jours de la semaine sur la consommation annuelle. 
+Dans la suite, nous avons considéré la mise en place des Modèles Additifs Généralisés (GAM). Pour cela, nous avons d'abord modifié notre équation. Nous avons distingué les variables à mettre dans la partie linéaire du modèle, puis dans la partie spline. Nous avons ainsi intégré les variables qualitatives ainsi que la consommation de la veille en fonction du jour de la semaine dans la partie linéaire. Dans la partie spline, nous avons ajouté les variables ayant une notion de temporalité comme *Load.7* ou les températures. Nous avons également regroupé dans une même spline des variables ayant une relation logique, comme c'était le cas de la température et le temps. Enfin, nous avons également créé une fonction spline pour chaque jour de la semaine pour la variable *toy* pour ne pas négliger l'effet des jours de la semaine sur la consommation annuelle. 
 
 ```{r GAM, include=TRUE, message=TRUE, echo=TRUE}
 equation <- "Load ~ Load.1:as.factor(WeekDays) + HI + BH + Christmas_break +
@@ -178,6 +175,7 @@ gam<-gam(equation%>%as.formula, data=Data0)
 gam.forecast <- predict(gam, newdata=Data1)
 rmse(Data1$Load, gam.forecast)
 ```
+Même si la RMSE du validation set de GAM est moins bonne que celle des modèles linéaires, les résultats sur le test set différent. 
 
 ```{r}
 plot_data <- tibble(x=Data1$Date, y=Data1$Load, y1=gam.forecast)
@@ -190,24 +188,24 @@ p <- ggplot(plot_data, aes(x)) +
 p
 ```
 
-Pour améliorer le rendement du modèle, nous avons tenté de comprendre l'origine des erreurs à partir des courbes de consommation. Nous avons constaté que les erreurs commencent à s'accentuer au niveau du mois de mars 2020, juste au niveau du début de la période covid. Ceci s'explique du fait que la variable *GovernementResponseIndex* comprend des valeurs nulles pendant des années, et celles-ci explosent dans une courte période d'un mois, laissant peu de temps d'entraînement sur la pandémie. Pour simuler le comportement de la population pendant le confinement avec les données que l'on avait déjà, nous avons pensé aux samedis. En effet, nous avons émis l'hypothèse qu'un jour de confinement était comparable en termes de consommation à un jour de weekend comme un samedi. Dans cet esprit, nous avons créé la variable WD, qui modifie le jour de la semaine à samedi s'il y a confinement (la GovernementResponseIndex>=70), et maintien le jours de la semaine inchangé sinon. Ici, une autre bonne idée serait d'utiliser l'apprentissage en ligne, un concept que nous avons en fait utilisé par la suite. L'apprentissage en ligne nous permet de prendre en compte des données d'entraînement de l'époque contemporaine.
+Pour améliorer le rendement du modèle, nous avons tenté de comprendre l'origine des erreurs à partir des courbes de consommation. Nous avons constaté que les erreurs commencent à s'accentuer au niveau du mois de mars 2020, correspondant au début de la période Covid. Ceci s'explique du fait que la variable *GovernementResponseIndex* comprend des valeurs nulles pendant des années, et celles-ci explosent dans une courte période d'un mois, laissant peu de temps d'entraînement sur la pandémie. Pour simuler le comportement de la population pendant le confinement avec les données que l'on avait déjà, nous avons pensé aux samedis. En effet, nous avons émis l'hypothèse qu'un jour de confinement était comparable en termes de consommation à un jour de weekend comme un samedi. Dans cet esprit, nous avons créé la variable *WD*, qui modifie le jour de la semaine à samedi s'il y a confinement (la *GovernementResponseIndex*>=70), et maintien les jours de la semaine inchangés sinon. Une autre idée serait d'utiliser l'apprentissage en ligne, un concept que nous avons utilisé par la suite. L'apprentissage en ligne nous permet de prendre en compte des données d'entraînement de l'époque contemporaine avec des mises à jour.
 
-Nous avons également utilisé la fonction gam.check pour améliorer le rendement du modèle gam. Celle-ci nous a permis d'ajuster la dimension des bases des splines. Nous avons ainsi incrémenter les valeurs de k quand la p-value était très petite. Pour la variable toy, utiliser un k très grand faisait tourner le modèle trop long, nous avons donc pris k=30 même si la p-value était encore petite. Enfin, nous avons également vérifié que les résidus étaient bien gaussiens à chaque fois à partir de l'histogramme issu du plot. Nous pouvons voir que les résidus sont en fait distribués de manière gaussienne. Le tracé Q-Q n'est pas une ligne parfaite, ce qui montre que le modèle a encore un certain potentiel pour s'améliorer.
+## Gam Check
+Nous avons également utilisé la fonction gam.check pour améliorer le rendement du modèle gam. Celle-ci nous a permis d'ajuster la dimension des bases des splines. Nous avons ainsi incrémenter les valeurs de k quand la p-value était très petite. Pour la variable *toy*, utiliser un k très grand faisait tourner le modèle trop long, nous avons donc pris k=30 même si la p-value était encore petite. Enfin, nous avons également vérifié que les résidus étaient bien gaussiens à chaque fois à partir de l'histogramme issu du plot. Nous pouvons voir que les résidus sont en fait distribués de manière gaussienne. Le QQ-plot n'est pas une ligne parfaite, ce qui montre que le modèle a encore un certain potentiel pour s'améliorer.
 
 ```{r gam.check, fig.height=4}
 gam.check(gam)
 ```
 
 ### GAM et régression quantile: qgam
-
-Dans la suite on utilisera le package qgam, et en particulier la fonction qgam. Celle-ci ajuste un modèle additif ainsi qu'une régression quantile sur un unique quantile. On utilise ici la même équation qu'auparavant, il suffit juste d'ajuster la variable "qu", correspondant au quantile. Après plusieurs essais, nous avons remarqué qu'on obtient de meilleurs résultats avec ‘qu' autour de 0.4. En effet, en fixant le quantile à 0.4, on change la fonction de perte. On introduit ainsi un biais, qui permet de s'ajuster mieux aux données lors de la période du covid.  
+Dans la suite nous utiliserons le package qgam, et en particulier la fonction qgam. Celle-ci ajuste un modèle additif ainsi qu'une régression quantile sur un unique quantile. On utilise ici la même équation qu'auparavant, il suffit juste d'ajuster la variable "qu", correspondant au quantile. Après plusieurs essais, nous avons remarqué qu'on obtient de meilleurs résultats pour un ‘qu' autour de 0.4. En effet, en fixant le quantile à 0.4, on change la fonction de perte. Nous introduisons ainsi un biais permettant de mieux s'ajuster aux données lors de la période du Covid.  
 
 ```{r qgam , include=TRUE, message=TRUE, echo=TRUE}
 gam9<-qgam(equation%>%as.formula, data=Data0, qu=0.4)
 gam9.forecast <- predict(gam9, newdata=Data1)
 rmse(Data1$Load, gam9.forecast)
 ```
-
+Nous pouvons observer que la prédiction issue du qgam s'améliore nettement pendant la période Covid par rapport aux autres modèles. Cette observation est aussi remarquable au niveau du RMSE, qui diminue de 300 par rapport aux résultats de GAM. 
 ```{r}
 plot_data <- tibble(x=Data1$Date, y=Data1$Load, y1=gam9.forecast)
 p <- ggplot(plot_data, aes(x)) +
@@ -219,10 +217,8 @@ p <- ggplot(plot_data, aes(x)) +
 p
 ```
 
-## ARIMA et Kalman Filter
-
-### ARIMA
-ARIMA (Autoregressive Integrated Moving Average) est un modèle de série chronologique qui utilise les valeurs et les erreurs passées pour prévoir les valeurs futures d'une série. Le modèle peut être ajusté pour capturer les tendances et la saisonnalité, et implique de différencier les données pour les rendre stationnaires. L'ARIMA est largement utilisé pour faire des prévisions sur la base de tendances historiques.
+## ARIMA
+ARIMA (Autoregressive Integrated Moving Average) est un modèle de série chronologique qui utilise les valeurs et les erreurs passées pour prévoir les valeurs futures d'une série. Le modèle peut être ajusté pour capturer les tendances et la saisonnalité, et implique une différenciation des données pour les rendre stationnaires. Le modèle ARIMA est largement utilisé pour faire des prévisions sur la base de tendances historiques.
 
 ```{r arima , include=TRUE, echo=TRUE} 
 arima.fit <- forecast::Arima(gam9.forecast,
@@ -230,7 +226,7 @@ arima.fit <- forecast::Arima(gam9.forecast,
 arima.predict <- fitted(arima.fit)
 rmse(arima.predict, Data1$Load)
 ```
-
+Le résultat n'est pas bon. En revanche, on constate que la nature des prédictions est bien différente par rapport aux autres modèles. Ceci sera donc intéréssant à considérer pour l'aggrégation d'experts. 
 ```{r}
 plot_data <- tibble(x=Data1$Date, y=Data1$Load, y1=arima.predict)
 p <- ggplot(plot_data, aes(x)) +
@@ -242,8 +238,8 @@ p <- ggplot(plot_data, aes(x)) +
 p
 ```
 
-### Filtre Kalman 
-Une fois le modèle qgam amélioré le modèle qgam, nous avons décidé d’implémenter le online-learning. Cette méthode nous permet d’aborder le problème de données d’entraînement insuffisantes pour la période covid. En effet, le filtre Kalman dynamique met à jour l’estimation des poids séquentiellement, au fur et mesure des prédictions …ajouter ici ce que dynamique fait en particulier….. Pour simplifier la situation covid, nous avons créé la variable GRI_factor, étant une variable catégorielle à trois facteurs (none: 0-50, medium: 50-62, high:62-70). Ceci nous permet faire une mise au point de la situation covid avec du online-learning. Malheureusement, les résultats étaient meilleurs sans cette variable. C’est pour cela que nous avons décidé de continuer avec le modèle qgam précédent pour le online learning. 
+## Filtre Kalman 
+Une fois le modèle qgam amélioré, nous avons décidé d’implémenter le online-learning. Cette méthode nous permet d’aborder le problème des données d’entraînement insuffisantes pour la période Covid. En effet, le filtre Kalman met à jour l’estimation des poids séquentiellement, au fur et mesure des prédiction, ce qui résoud partiellement le problème de données Covid insuffisantes. Pour simplifier la situation Covid, nous avons créé la variable *GRI_factor*, étant une variable catégorielle à trois facteurs (none, medium, high). Ceci nous permet faire une mise au point de la situation Covid avec du online-learning. Malheureusement, les résultats étaient meilleurs sans cette variable. C’est pour cela que nous avons décidé de continuer avec le modèle qgam précédent pour le online learning. 
 
 ```{r Kalman Filter, include=TRUE, message=TRUE, echo=TRUE}
 ######online learning
@@ -268,7 +264,7 @@ ssm_dyn <- predict(ssm_dyn, X, y, type='model', compute_smooth = TRUE)
 gam9.kalman.Dyn <- ssm_dyn$pred_mean%>%tail(nrow(Data1))
 rmse(Data1$Load, gam9.kalman.Dyn)
 ```
-
+Comme pour le Arima, les résultats ne sont pas optimaux, mais à nouveau, les prédiction sont différentes et intéréssantes pour l'aggrégation d'experts. 
 ```{r}
 plot_data <- tibble(x=Data1$Date, y=Data1$Load, y1=gam9.kalman.Dyn)
 p <- ggplot(plot_data, aes(x)) +
@@ -283,8 +279,7 @@ p
 ## Pipeline basée sur le modèle qgam
 
 Étant arrivés au bout des améliorations de qgam, et tout en ayant tenté arima et le filtre kalman, nous avons considéré d'autres modèles vus en cours pour comparer les performances. 
-On a ainsi décidé de garder notre équation sur la qgam et de l'implémenter ensuite sur d'autres modèles. On a aussi étudié les résidus. Ceci va nous permettre d'ameliorer les modèles. \\
-Nous avons décidé de tester les forêts aléatoires sur les résidus de qgam. Après avoir appliqué l'effet des forêts aléatoires sur le modèle, nous avons amélioré davantage la performance à l'aide de Arima. 
+Nous avons ainsi étudié les résidus et appliqué des forêts aléatoires, ce qui va nous permettre d'ameliorer le modèle. Ensuite, nous avons amélioré davantage la performance à l'aide de Arima. 
 
 ```{r Pipeline, message=FALSE, echo=FALSE, include=FALSE, warning=FALSE}
 Nblock<-10
@@ -359,9 +354,9 @@ gam9.arima.forecast <- gam9.forecast + prevARIMA.res
 
 ## Aggrégation d'experts 
 
-Comme dernière méthode, nous avons décidé de mettre en place un agrégation d'experts pour extraire une combinaison de prédicteurs qui puissent améliorer davantage la performance du modèle. Pour cela, nous avons regroupé les différents prédicteurs dans une variable experts. Dans cette agrégation d'experts, nous avons utilisé les différents modèles gam,  qgam (avec et sans arima), une forêt aléatoire comprenant toutes les variables, un filtre kalman, la pipeline... 
+Comme dernière méthode, nous avons décidé d'implémenter un agrégation d'experts pour extraire une combinaison de prédicteurs qui puissent améliorer davantage la performance du modèle. Pour cela, nous avons regroupé l'ensemble des prédicteurs dans une variable experts. Dans cette agrégation d'experts, nous avons utilisé les différents modèles, notamment: le modèle linéaire polynomial, gam, qgam (avec et sans arima), une forêt aléatoire comprenant toutes les variables, un filtre kalman et la pipeline.
 
-Le modèle obtenu par combinaison des différents prédicteurs obtient une performance bien meilleure que celle obtenue auparavant. Comme on peut le voir dans la figure, le modèle BOA permet d’ajuster les coefficients des modèles de façon variable sur chaque partie.  
+Le modèle d'aggrégation obtient une performance bien meilleure que celle obtenue auparavant. Comme on peut le voir dans la figure, le modèle MLpol permet d’ajuster les coefficients des modèles de façon variable sur chaque partie.  
 
 ```{r Expert Aggregation, include=TRUE, echo=TRUE, message=FALSE}
 experts <- cbind(gam9.forecast, pred2,rf.forecast, gam.forecast,
@@ -393,8 +388,7 @@ par(mfrow=c(1,1))
 rmse(agg$prediction, y=Data1$Load)
 ```
 
-La figure finale avec presque tous nos modèles sur les données train (sel_a): 
-
+Nous pouvons voir dans la figure, que le modèle le plus performant est effectivement issu de l'aggrégation d'experts. En effet, nous avons des modèles avec des prédictions très différentes. L'aggrégation de ces modèles, avec mis-a-jour des coefficients dans le temps, se traduit par une amélioration nette de la performance. Comme on peut le voir sur la figure, lors de l'apparition du Covid, nos prédictions sont moins performantes. Avec l'aggrégation d'experts nous avons réussi à améliorer nos prédictions, même si dans cet entraînement (sel_a), l'accès aux périodes Covid étaient extrêment restreint. 
 ```{r}
 models = c(Data1$Load, pred2, gam9.forecast, gam9.arima.forecast, agg$prediction)
 K <-ncol(models)
@@ -417,12 +411,9 @@ p <- ggplot(plot_data, aes(x)) +
 p  
 ```
 
-Nous pouvons voir sur la figure, que le modèle  le plus performant est effectivement issu de la combinaison des autres modèles. !!!! COMMENTER !!!
-
-%%% A Rajouter les critères utilisés pour des bons modèles. 
+ 
 
 # Conclusion
-
-Dans ce travail, nous avons testé plusieurs modèles différents pour prédire la charge électrique de la France. Si nos modèles les plus simples donnaient déjà des résultats exploitables, les plus complexes étaient encore plus prometteurs. Le plus grand défi a été le fait que la période de test a été fixée pendant la pandémie de covid, rendant la prévision plus difficile. Notre meilleur modèle est un modèle additif généralisé avec régression quantile. L'utilisation de techniques telles que l'agrégation d'experts et l'apprentissage en ligne a encore amélioré notre précision. Un autre défis, était le fait qu’au niveau des jeux de données train issus de sel_a, on n’avait pas encore du covid. Ceci créait un biais entre les scores prévus et ceux sur Kaggle.  En effet, en entraînant le jeu de données train tout entier, on avait un mois de covid, ce qui améliorait nettement nos résultats. 
+Dans ce travail, nous avons testé plusieurs modèles différents pour prédire la charge électrique de la France. Nous avons vu que nos modèles plus simples donnaient déjà des résultats exploitables. Lors de leur complexification les résultats étaient encore plus prometteurs. Le plus grand défi a été le fait que la période de test a été fixée en plus grande partie pendant la pandémie du Covid. Notre meilleur modèle est un modèle additif généralisé avec régression quantile. L'utilisation de techniques telles que l'aggrégation d'experts et l'apprentissage en ligne ont encore amélioré notre précision. Un autre défis, était le fait qu’au niveau des jeux de données train issus de sel_a, on n’avait pas encore du Covid. Ceci créait un biais entre les scores prévus et ceux sur Kaggle.  En effet, en entraînant le jeu de données train tout entier, on avait un mois de Covid, ce qui améliorait nettement nos résultats.  
 
 
