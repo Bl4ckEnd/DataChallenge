@@ -7,19 +7,20 @@ library(forecast)
 library(tidyverse)
 library(ranger)
 library(opera)
+
+#rmse function 
 rmse = function(y, ychap, digits=0){
   return(round(sqrt(mean((y-ychap)^2, na.rm=TRUE)), digits=digits))
 }
 
-###Load Datasets
-load("../Data/Data0.Rda")
-load("../Data/Data1.Rda")
+###Load datasets
+load("Data/Data0.Rda")
+load("Data/Data1.Rda")
 
-### Change weekdays --> saturdays if govresponseindex>0.70
 
-###Mise en place des dataframes
-Data_train = new_Data0
-Data_test = new_Data1
+###Setting the datasets
+Data_train = Data0
+Data_test = Data1
 Data_train$Time <- as.numeric(Data_train$Date)
 Data_test$Time <- as.numeric(Data_test$Date)
 Data_train$GRI_factor = as.factor(Data_train$GRI_factor)
@@ -35,7 +36,6 @@ sel_b <- which(Data_train$Year>2019)
 
 Data0 <- Data_train[sel_a, ]
 Data1 <- Data_train[sel_b, ]
-Data_test = add_column(Data_test, Load=lead(Data_test$Load.1, default=mean(Data_test$Load.1)), .after = "Date")
 
 ##### Choix des variables avec rf
 equation <- "Load~  Time + toy + Temp + Load.1 + Load.7 + Temp_s99 + WeekDays + BH + Temp_s95_max + 
@@ -143,7 +143,6 @@ X_test <- cbind(X_test,1)
 y_test <- Data_test$Load
 
 #dynamic
-
 ssm <- viking::statespace(X, y)
 gam9.kalman.static <- ssm$pred_mean%>%tail(nrow(Data_test))
 ssm_dyn <- viking::select_Kalman_variances(ssm, X, y, q_list = 2^(-30:0), p1 = 1, ncores = 6)
