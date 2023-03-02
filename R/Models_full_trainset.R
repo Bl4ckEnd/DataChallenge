@@ -276,4 +276,3 @@ lines(Data_test$Date,gam9.kalman.Dyn, type='l', ylab='qgam',col="red")
 lines(Data_test$Date, agg$prediction, type='l', ylab='agg_exp', col='darkred')
 
 legend("topleft", col=col, legend=nom_mod, lty=1, bty='n')
-
